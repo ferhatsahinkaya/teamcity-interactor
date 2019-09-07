@@ -8,12 +8,15 @@ interface BuildServerClient {
     @RequestLine("GET")
     @Headers("Accept: application/json",
             "Content-Type: application/json")
-    fun getBuilds(): List<BuildName>
+    fun getBuilds(): List<Build>
 
     @RequestLine("DELETE")
     @Headers("Content-Type: application/json")
-    fun deleteBuild(build: BuildName)
+    fun deleteBuild(buildName: BuildName)
 }
+
+@JacksonXmlRootElement
+data class Build(val id: String, val responseUrl: String)
 
 @JacksonXmlRootElement
 data class BuildName(val id: String)

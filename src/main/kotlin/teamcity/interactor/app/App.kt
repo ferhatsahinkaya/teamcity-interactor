@@ -52,12 +52,18 @@ fun main(args: Array<String>) {
 
     fixedRateTimer("triggerWaitingBuilds", false, 0L, 5000) {
         buildServerClient.getBuilds()
-                .map { it.id }
-                .forEach { buildServerBuildName ->
-                    val build = buildConfigs.first { it.names.any { teamCityBuildName -> teamCityBuildName.toLowerCase() == buildServerBuildName.toLowerCase() } }
+                .forEach { buildServerBuild ->
+                    val build = buildConfigs.first { it.names.any { teamCityBuildName -> teamCityBuildName.toLowerCase() == buildServerBuild.id.toLowerCase() } }
                     teamCityClient.build(TeamCityBuild(TeamCityBuildType(build.id)))
-                    buildServerClient.deleteBuild(BuildName(buildServerBuildName))
-                    println("Triggered Build $build")
+                    buildServerClient.deleteBuild(BuildName(buildServerBuild.id))
+
+                    println(buildServerBuild.responseUrl)
+                    Feign.builder()
+                            .encoder(JacksonEncoder(ObjectMapper().registerModule(KotlinModule())))
+                            .logger(Slf4jLogger(ReportingClient::class.java))
+                            .logLevel(Logger.Level.FULL)
+                            .target(ReportingClient::class.java, buildServerBuild.responseUrl)
+                            .report(Report("${buildServerBuild.id} teamcity build (buildId = ${build.id}) has been triggered"));
                 }
     }
 }
