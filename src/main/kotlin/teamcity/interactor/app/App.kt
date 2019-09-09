@@ -18,6 +18,7 @@ import kotlin.concurrent.fixedRateTimer
 data class BuildConfig(val id: String, val names: Set<String>)
 data class BuildServerConfig(val baseUrl: String, val waitingBuildsResource: String)
 data class TeamCityServerConfig(val baseUrl: String, val buildQueueUrl: String)
+data class BuildInformation(val id: String, var state: String, val responseUrl: String)
 
 class ConfigReader {
     // TODO make this method generic
@@ -29,8 +30,6 @@ class ConfigReader {
             .registerModule(KotlinModule())
             .readValue(this::class.java.getResource(configFile), clazz)
 }
-
-data class BuildMapping(val buildId: String, val responseUrl: String)
 
 fun main(args: Array<String>) {
     val buildConfigs: List<BuildConfig> = ConfigReader().config("build-config.json")
@@ -44,45 +43,42 @@ fun main(args: Array<String>) {
                     .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)))
             .logger(Slf4jLogger(BuildServerClient::class.java))
             .logLevel(Logger.Level.FULL)
-            .target(BuildServerClient::class.java, "${buildServerConfig.baseUrl}${buildServerConfig.waitingBuildsResource}");
+            .target(BuildServerClient::class.java, "${buildServerConfig.baseUrl}${buildServerConfig.waitingBuildsResource}")
 
     val teamCityClient = Feign.builder()
             .encoder(JacksonEncoder(XmlMapper().registerModule(KotlinModule())))
             .decoder(JacksonDecoder(XmlMapper().registerModule(KotlinModule()).disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)))
             .logger(Slf4jLogger(TeamCityClient::class.java))
             .logLevel(Logger.Level.FULL)
-            .target(TeamCityClient::class.java, "${teamCityServerConfig.baseUrl}${teamCityServerConfig.buildQueueUrl}");
+            .target(TeamCityClient::class.java, "${teamCityServerConfig.baseUrl}${teamCityServerConfig.buildQueueUrl}")
 
-    val buildStates = mutableMapOf<String, String?>()
-    val addedBuilds = mutableListOf<BuildMapping>()
+    val builds = mutableListOf<BuildInformation>()
 
     fixedRateTimer("triggerWaitingBuilds", false, 0L, 5000) {
         buildServerClient.getBuilds()
                 .forEach { buildServerBuild ->
-                    val build = buildConfigs.first { it.names.any { teamCityBuildName -> teamCityBuildName.toLowerCase() == buildServerBuild.id.toLowerCase() } }
-                    val newTeamCityBuild = teamCityClient.build(TeamCityBuild(TeamCityBuildType(build.id)))
-                    addedBuilds.add(BuildMapping(newTeamCityBuild.id!!, buildServerBuild.responseUrl))
-                    buildStates[newTeamCityBuild.id] = null
-
+                    buildConfigs
+                            .firstOrNull { buildConfig -> buildConfig.names.any { teamCityBuildName -> teamCityBuildName.toLowerCase() == buildServerBuild.id.toLowerCase() } }
+                            ?.let { teamCityClient.build(TeamCityBuildRequest(TeamCityBuildType(it.id))) }
+                            ?.let { BuildInformation(it.id, "none", buildServerBuild.responseUrl) }
+                            ?.let { builds.add(it) }
                     buildServerClient.deleteBuild(BuildName(buildServerBuild.id))
-
-                    println(buildServerBuild.responseUrl)
                 }
     }
 
     fixedRateTimer("watchBuilds", false, 0L, 5000) {
-        addedBuilds
-                .forEach {
-                    val teamCityBuild = teamCityClient.status(it.buildId)
-                    if(teamCityBuild.state != buildStates[it.buildId]) {
-                        buildStates[it.buildId] = teamCityBuild.state
+        builds.forEach { build ->
+            teamCityClient.status(build.id)
+                    .takeUnless { it.state == build.state }
+                    ?.let {
+                        build.state = it.state
                         Feign.builder()
                                 .encoder(JacksonEncoder(ObjectMapper().registerModule(KotlinModule())))
                                 .logger(Slf4jLogger(ReportingClient::class.java))
                                 .logLevel(Logger.Level.FULL)
-                                .target(ReportingClient::class.java, it.responseUrl)
-                                .report(Report("${teamCityBuild.buildType.id} teamcity build is ${teamCityBuild.state}"));
+                                .target(ReportingClient::class.java, build.responseUrl)
+                                .report(Report("${it.buildType.id} teamcity build is ${it.state}"))
                     }
-                }
+        }
     }
 }

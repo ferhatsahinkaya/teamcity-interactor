@@ -12,7 +12,7 @@ interface TeamCityClient {
     @Headers("Accept: application/xml",
             "Content-Type: application/xml",
             "Authorization: Basic dGVhbS5oaXJvOnBhc3N3b3Jk")
-    fun build(build: TeamCityBuild): TeamCityBuild
+    fun build(request: TeamCityBuildRequest): TeamCityBuild
 
     @RequestLine("GET /id:{id}")
     @Headers("Accept: application/xml",
@@ -22,7 +22,10 @@ interface TeamCityClient {
 }
 
 @JacksonXmlRootElement(localName = "build")
-data class TeamCityBuild(val buildType: TeamCityBuildType, val id: String? = null, val state: String? = null, val status: String? = null)
+data class TeamCityBuild(val buildType: TeamCityBuildType, val id: String, val state: String, val status: String?)
+
+@JacksonXmlRootElement(localName = "build")
+data class TeamCityBuildRequest(val buildType: TeamCityBuildType)
 
 @JacksonXmlRootElement(localName = "buildType")
 data class TeamCityBuildType(@JacksonXmlProperty(isAttribute = true) val id: String)
