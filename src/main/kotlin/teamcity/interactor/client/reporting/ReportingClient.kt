@@ -1,5 +1,6 @@
 package teamcity.interactor.client.reporting
 
+import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlRootElement
 import com.fasterxml.jackson.module.kotlin.KotlinModule
@@ -27,4 +28,13 @@ interface ReportingClient {
 }
 
 @JacksonXmlRootElement
-data class Report(val text: String)
+data class Report(@JsonProperty("blocks") val messages: List<ReportingMessage>)
+
+@JacksonXmlRootElement
+data class ReportingMessage(val type: String = "section", val text: Text, val accessory: Accessory)
+
+@JacksonXmlRootElement
+data class Text(val type: String = "mrkdwn", val text: String)
+
+@JacksonXmlRootElement
+data class Accessory(val type: String = "image", @JsonProperty("image_url") val imageUrl: String, @JsonProperty("alt_text") val altText: String)
