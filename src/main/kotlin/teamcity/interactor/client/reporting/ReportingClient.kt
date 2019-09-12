@@ -1,5 +1,7 @@
 package teamcity.interactor.client.reporting
 
+import com.fasterxml.jackson.annotation.JsonFormat
+import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlRootElement
@@ -31,10 +33,23 @@ interface ReportingClient {
 data class Report(@JsonProperty("blocks") val messages: List<ReportingMessage>)
 
 @JacksonXmlRootElement
-data class ReportingMessage(val type: String = "section", val text: Text, val accessory: Accessory)
+data class ReportingMessage(val type: String = "section", val text: Text, @JsonProperty("accessory") val buildStatus: BuildStatus)
 
 @JacksonXmlRootElement
 data class Text(val type: String = "mrkdwn", val text: String)
 
-@JacksonXmlRootElement
-data class Accessory(val type: String = "image", @JsonProperty("image_url") val imageUrl: String, @JsonProperty("alt_text") val altText: String)
+@JsonFormat(shape = JsonFormat.Shape.OBJECT)
+enum class BuildStatus(val type: String = "image", @JsonIgnore val state: String, @JsonIgnore val statusPredicate: (String?) -> Boolean, val image_url: String, val alt_text: String) {
+    Success(state = "finished", statusPredicate = { it == "SUCCESS" }, image_url = "https://cdn0.iconfinder.com/data/icons/social-messaging-ui-color-shapes/128/check-circle-green-512.png", alt_text = "Success"),
+    Failure(state = "finished", statusPredicate = { it != "SUCCESS" }, image_url = "https://cdn0.iconfinder.com/data/icons/social-messaging-ui-color-shapes/128/close-circle-red-512.png", alt_text = "Failure"),
+    Running(state = "running", statusPredicate = { true }, image_url = "https://cdn3.iconfinder.com/data/icons/living/24/254_running_activity_fitness-512.png", alt_text = "Running"),
+    Queued(state = "queued", statusPredicate = { true }, image_url = "https://cdn1.iconfinder.com/data/icons/company-business-people-1/32/busibess_people-40-512.png", alt_text = "Queued");
+
+    companion object {
+        fun of(state: String, status: String?): BuildStatus {
+            println("state $state, status $status")
+            return values()
+                    .first { it.state == state && it.statusPredicate(status) }
+        }
+    }
+}
