@@ -29,17 +29,22 @@ fun main() {
         setBuilds {
             builds.plus(
                     buildServerClient.getBuilds()
-                            .filter { BUILD_CONFIGS.any { buildConfig -> buildConfig.names.any { teamCityBuildName -> teamCityBuildName.toLowerCase() == it.id.toLowerCase() } } }
-                            .map { buildServerBuild ->
-                                BUILD_CONFIGS
-                                        .first { buildConfig -> buildConfig.names.any { teamCityBuildName -> teamCityBuildName.toLowerCase() == buildServerBuild.id.toLowerCase() } }
-                                        .let { teamCityClient.build(TeamCityBuildRequest(TeamCityBuildType(it.id))) }
-                                        .let { TeamCityBuild(it.buildType, it.id, "none", it.status) }
-                                        .let {
-                                            println(buildServerBuild.responseUrl)
-                                            buildServerClient.deleteBuild(BuildName(buildServerBuild.id))
-                                            BuildInformation(it, buildServerBuild.responseUrl)
+                            .mapNotNull { buildServerBuild ->
+                                val buildInformation = BUILD_CONFIGS.firstOrNull { buildConfig -> buildConfig.names.any { teamCityBuildName -> teamCityBuildName.equals(buildServerBuild.id, true) } }
+                                        ?.let { teamCityClient.build(TeamCityBuildRequest(TeamCityBuildType(it.id))) }
+                                        ?.let { TeamCityBuild(it.buildType, it.id, "none", it.status) }
+                                        ?.let { BuildInformation(it, buildServerBuild.responseUrl) }
+                                        ?: run {
+                                            REPORTING_CLIENT_FACTORY.client(buildServerBuild.responseUrl).report(Report(
+                                                    listOf(ReportingMessage(
+                                                            text = Text(text = "${buildServerBuild.id} build is not found"),
+                                                            buildStatus = BuildStatus.NotFound))))
+                                            null
                                         }
+
+                                println(buildServerBuild.responseUrl)
+                                buildServerClient.deleteBuild(BuildName(buildServerBuild.id))
+                                buildInformation
                             }
                             .toList())
         }

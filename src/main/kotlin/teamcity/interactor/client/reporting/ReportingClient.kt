@@ -1,3 +1,4 @@
+
 package teamcity.interactor.client.reporting
 
 import com.fasterxml.jackson.annotation.JsonFormat
@@ -43,7 +44,8 @@ enum class BuildStatus(val type: String = "image", @JsonIgnore val state: String
     Success(state = "finished", statusPredicate = { it == "SUCCESS" }, image_url = "https://cdn0.iconfinder.com/data/icons/social-messaging-ui-color-shapes/128/check-circle-green-512.png", alt_text = "Success"),
     Failure(state = "finished", statusPredicate = { it != "SUCCESS" }, image_url = "https://cdn0.iconfinder.com/data/icons/social-messaging-ui-color-shapes/128/close-circle-red-512.png", alt_text = "Failure"),
     Running(state = "running", statusPredicate = { true }, image_url = "https://cdn3.iconfinder.com/data/icons/living/24/254_running_activity_fitness-512.png", alt_text = "Running"),
-    Queued(state = "queued", statusPredicate = { true }, image_url = "https://cdn1.iconfinder.com/data/icons/company-business-people-1/32/busibess_people-40-512.png", alt_text = "Queued");
+    Queued(state = "queued", statusPredicate = { true }, image_url = "https://cdn1.iconfinder.com/data/icons/company-business-people-1/32/busibess_people-40-512.png", alt_text = "Queued"),
+    NotFound(state = "notfound", statusPredicate = { throw UnsupportedOperationException() }, image_url = "https://cdn3.iconfinder.com/data/icons/network-and-communications-8/32/network_Error_lost_no_page_not_found-512.png", alt_text = "Not Found");
 
     companion object {
         fun of(state: String, status: String?): BuildStatus {
