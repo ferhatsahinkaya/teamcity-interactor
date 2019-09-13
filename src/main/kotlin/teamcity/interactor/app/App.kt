@@ -19,7 +19,7 @@ class Application internal constructor(private val buildServerClient: BuildServe
     data class BuildInformation(val teamCityBuild: TeamCityBuild, val responseUrl: String)
 
     fun run() {
-        fixedRateTimer("triggerWaitingBuilds", false, 0L, 5000) {
+        fixedRateTimer("triggerWaitingBuilds", false, 0L, 10000) {
             setBuilds {
                 builds.plus(
                         buildServerClient.getBuilds()
@@ -47,18 +47,17 @@ class Application internal constructor(private val buildServerClient: BuildServe
 
         fixedRateTimer("watchBuilds", false, 0L, 5000) {
             setBuilds {
-                builds
-                        .map { buildInformation ->
-                            val latestTeamCityBuild = teamCityClient.status(buildInformation.teamCityBuild.id)
-                            latestTeamCityBuild.takeUnless { buildInformation.teamCityBuild.state == it.state }
-                                    ?.let {
-                                        REPORTING_CLIENT_FACTORY.client(buildInformation.responseUrl).report(Report(
-                                                listOf(ReportingMessage(
-                                                        text = Text(text = "${latestTeamCityBuild.buildType.id} build is ${latestTeamCityBuild.state}"),
-                                                        buildStatus = BuildStatus.of(latestTeamCityBuild.state, latestTeamCityBuild.status)))))
-                                    }
-                            BuildInformation(latestTeamCityBuild, buildInformation.responseUrl)
-                        }
+                builds.map { buildInformation ->
+                    val latestTeamCityBuild = teamCityClient.status(buildInformation.teamCityBuild.id)
+                    latestTeamCityBuild.takeUnless { buildInformation.teamCityBuild.state == it.state }
+                            ?.let {
+                                REPORTING_CLIENT_FACTORY.client(buildInformation.responseUrl).report(Report(
+                                        listOf(ReportingMessage(
+                                                text = Text(text = "${latestTeamCityBuild.buildType.id} build is ${latestTeamCityBuild.state}"),
+                                                buildStatus = BuildStatus.of(latestTeamCityBuild.state, latestTeamCityBuild.status)))))
+                            }
+                    BuildInformation(latestTeamCityBuild, buildInformation.responseUrl)
+                }
             }
             println("watchBuilds: $builds")
         }
