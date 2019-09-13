@@ -47,7 +47,7 @@ class Application internal constructor(private val buildServerClient: BuildServe
 
         fixedRateTimer("watchBuilds", false, 0L, 5000) {
             setBuilds {
-                builds.map { buildInformation ->
+                builds.mapNotNull { buildInformation ->
                     val latestTeamCityBuild = teamCityClient.status(buildInformation.teamCityBuild.id)
                     latestTeamCityBuild.takeUnless { buildInformation.teamCityBuild.state == it.state }
                             ?.let {
@@ -56,7 +56,7 @@ class Application internal constructor(private val buildServerClient: BuildServe
                                                 text = Text(text = "${latestTeamCityBuild.buildType.id} build is ${latestTeamCityBuild.state}"),
                                                 buildStatus = BuildStatus.of(latestTeamCityBuild.state, latestTeamCityBuild.status)))))
                             }
-                    BuildInformation(latestTeamCityBuild, buildInformation.responseUrl)
+                    if (latestTeamCityBuild.state != "finished") BuildInformation(latestTeamCityBuild, buildInformation.responseUrl) else null
                 }
             }
             println("watchBuilds: $builds")
