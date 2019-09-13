@@ -26,7 +26,7 @@ class Application internal constructor(private val buildServerClient: BuildServe
                                 .mapNotNull { buildServerBuild ->
                                     val buildInformation = BUILD_CONFIGS.firstOrNull { buildConfig -> buildConfig.names.any { teamCityBuildName -> teamCityBuildName.equals(buildServerBuild.id, true) } }
                                             ?.let { teamCityClient.build(TeamCityBuildRequest(TeamCityBuildType(it.id))) }
-                                            ?.let { TeamCityBuild(it.buildType, it.id, "none", it.status) }
+                                            ?.let { TeamCityBuild(it.buildType, it.id, it.number, "none", it.status) }
                                             ?.let { BuildInformation(it, buildServerBuild.responseUrl) }
                                             ?: run {
                                                 REPORTING_CLIENT_FACTORY.client(buildServerBuild.responseUrl).report(Report(
@@ -53,7 +53,7 @@ class Application internal constructor(private val buildServerClient: BuildServe
                             ?.let {
                                 REPORTING_CLIENT_FACTORY.client(buildInformation.responseUrl).report(Report(
                                         listOf(ReportingMessage(
-                                                text = Text(text = "${latestTeamCityBuild.buildType.id} build is ${latestTeamCityBuild.state}"),
+                                                text = Text(text = "*${latestTeamCityBuild.buildType.id}* build ${latestTeamCityBuild.number?.let { "*$it* " }.orEmpty()}is ${latestTeamCityBuild.state}"),
                                                 buildStatus = BuildStatus.of(latestTeamCityBuild.state, latestTeamCityBuild.status)))))
                             }
                     if (latestTeamCityBuild.state != "finished") BuildInformation(latestTeamCityBuild, buildInformation.responseUrl) else null

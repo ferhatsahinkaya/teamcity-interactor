@@ -40,7 +40,7 @@ interface TeamCityClient {
 }
 
 @JacksonXmlRootElement(localName = "build")
-data class TeamCityBuild(val buildType: TeamCityBuildType, val id: String, val state: String, val status: String?)
+data class TeamCityBuild(val buildType: TeamCityBuildType, val id: String, val number: String?, val state: String, val status: String?)
 
 @JacksonXmlRootElement(localName = "build")
 data class TeamCityBuildRequest(val buildType: TeamCityBuildType)
