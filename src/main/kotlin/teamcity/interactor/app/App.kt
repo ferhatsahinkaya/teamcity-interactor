@@ -1,5 +1,6 @@
 package teamcity.interactor.app
 
+import feign.FeignException
 import teamcity.interactor.client.buildserver.BUILD_SERVER_CLIENT_FACTORY
 import teamcity.interactor.client.buildserver.BuildName
 import teamcity.interactor.client.buildserver.BuildServerClient
@@ -19,25 +20,25 @@ class Application internal constructor(private val buildServerClient: BuildServe
     data class BuildInformation(val teamCityBuild: TeamCityBuild, val responseUrl: String)
 
     fun run() {
-        fixedRateTimer("triggerWaitingBuilds", false, 0L, 10000) {
+        fixedRateTimer("triggerBuilds", false, 0L, 10000) {
             setBuilds {
                 builds.plus(
-                        buildServerClient.getBuilds()
-                                .mapNotNull { buildServerBuild ->
-                                    val buildInformation = BUILD_CONFIGS.firstOrNull { buildConfig -> buildConfig.names.any { teamCityBuildName -> teamCityBuildName.equals(buildServerBuild.id, true) } }
+                        buildServerClient.getBuildRequests()
+                                .mapNotNull { buildRequest ->
+                                    val buildInformation = BUILD_CONFIGS.firstOrNull { buildConfig -> buildConfig.names.any { teamCityBuildName -> teamCityBuildName.equals(buildRequest.id, true) } }
                                             ?.let { teamCityClient.build(TeamCityBuildRequest(TeamCityBuildType(it.id))) }
                                             ?.let { TeamCityBuild(it.buildType, it.id, it.number, "none", it.status) }
-                                            ?.let { BuildInformation(it, buildServerBuild.responseUrl) }
+                                            ?.let { BuildInformation(it, buildRequest.responseUrl) }
                                             ?: run {
-                                                REPORTING_CLIENT_FACTORY.client(buildServerBuild.responseUrl).report(Report(
+                                                REPORTING_CLIENT_FACTORY.client(buildRequest.responseUrl).report(Report(
                                                         listOf(ReportingMessage(
-                                                                text = Text(text = "${buildServerBuild.id} build is not found"),
+                                                                text = Text(text = "${buildRequest.id} build is not found"),
                                                                 buildStatus = BuildStatus.NotFound))))
                                                 null
                                             }
 
-                                    println(buildServerBuild.responseUrl)
-                                    buildServerClient.deleteBuild(BuildName(buildServerBuild.id))
+                                    println(buildRequest.responseUrl)
+                                    buildServerClient.deleteBuildRequest(BuildName(buildRequest.id))
                                     buildInformation
                                 }
                                 .toList())
@@ -51,15 +52,41 @@ class Application internal constructor(private val buildServerClient: BuildServe
                     val latestTeamCityBuild = teamCityClient.status(buildInformation.teamCityBuild.id)
                     latestTeamCityBuild.takeUnless { buildInformation.teamCityBuild.state == it.state }
                             ?.let {
+                                val buildStatus = BuildStatus.of(latestTeamCityBuild.state, latestTeamCityBuild.status)
                                 REPORTING_CLIENT_FACTORY.client(buildInformation.responseUrl).report(Report(
                                         listOf(ReportingMessage(
-                                                text = Text(text = "*${latestTeamCityBuild.buildType.id}* build ${latestTeamCityBuild.number?.let { "*$it* " }.orEmpty()}is ${latestTeamCityBuild.state}"),
-                                                buildStatus = BuildStatus.of(latestTeamCityBuild.state, latestTeamCityBuild.status)))))
+                                                text = Text(text = "*${latestTeamCityBuild.buildType.id}* build ${latestTeamCityBuild.number?.let { "*$it* " }.orEmpty()}is ${buildStatus.displayName}"),
+                                                buildStatus = buildStatus))))
                             }
                     if (latestTeamCityBuild.state != "finished") BuildInformation(latestTeamCityBuild, buildInformation.responseUrl) else null
                 }
             }
             println("watchBuilds: $builds")
+        }
+
+        fixedRateTimer("cancelBuilds", false, 0L, 10000) {
+            buildServerClient.getCancelRequests()
+                    .distinctBy { it.id }
+                    .forEach { cancelRequest ->
+                        BUILD_CONFIGS.firstOrNull { buildConfig -> buildConfig.names.any { teamCityBuildName -> teamCityBuildName.equals(cancelRequest.id, true) } }
+                                ?.id
+                                ?.let { buildConfigId -> builds.filter { buildInformation -> buildConfigId == buildInformation.teamCityBuild.buildType.id }.map { it.teamCityBuild.id } }
+                                ?.takeIf { it.isNotEmpty() }
+                                ?.forEach {
+                                    try {
+                                        teamCityClient.cancel("buildQueue", it)
+                                    } catch (e: FeignException) {
+                                        if (e.status() == 404) teamCityClient.cancel("builds", it)
+                                    }
+                                }
+                                ?: run {
+                                    REPORTING_CLIENT_FACTORY.client(cancelRequest.responseUrl).report(Report(
+                                            listOf(ReportingMessage(
+                                                    text = Text(text = "No queued/running ${cancelRequest.id} build is found"),
+                                                    buildStatus = BuildStatus.NotFound))))
+                                }
+                        buildServerClient.deleteCancelRequest(BuildName(cancelRequest.id))
+                    }
         }
     }
 

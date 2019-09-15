@@ -14,7 +14,7 @@ import feign.slf4j.Slf4jLogger
 import teamcity.interactor.client.ClientFactory
 import teamcity.interactor.config.ConfigReader
 
-private data class BuildServerConfig(val baseUrl: String, val buildResource: String)
+private data class BuildServerConfig(val baseUrl: String)
 
 private val BUILD_SERVER_CONFIG = ConfigReader().config("build-server-config.json", BuildServerConfig::class.java)
 val BUILD_SERVER_CLIENT_FACTORY = object : ClientFactory<BuildServerClient> {
@@ -26,22 +26,34 @@ val BUILD_SERVER_CLIENT_FACTORY = object : ClientFactory<BuildServerClient> {
                             .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)))
                     .logger(Slf4jLogger(BuildServerClient::class.java))
                     .logLevel(Logger.Level.FULL)
-                    .target(BuildServerClient::class.java, "${BUILD_SERVER_CONFIG.baseUrl}${BUILD_SERVER_CONFIG.buildResource}")
+                    .target(BuildServerClient::class.java, BUILD_SERVER_CONFIG.baseUrl)
 }
 
 interface BuildServerClient {
-    @RequestLine("GET")
+    @RequestLine("GET /build")
     @Headers("Accept: application/json",
             "Content-Type: application/json")
-    fun getBuilds(): List<Build>
+    fun getBuildRequests(): List<BuildRequest>
 
-    @RequestLine("DELETE")
+    @RequestLine("DELETE /build")
     @Headers("Content-Type: application/json")
-    fun deleteBuild(buildName: BuildName)
+    fun deleteBuildRequest(buildName: BuildName)
+
+    @RequestLine("GET /cancel")
+    @Headers("Accept: application/json",
+            "Content-Type: application/json")
+    fun getCancelRequests(): List<CancelRequest>
+
+    @RequestLine("DELETE /cancel")
+    @Headers("Content-Type: application/json")
+    fun deleteCancelRequest(buildName: BuildName)
 }
 
 @JacksonXmlRootElement
-data class Build(val id: String, val responseUrl: String)
+data class CancelRequest(val id: String, val responseUrl: String)
+
+@JacksonXmlRootElement
+data class BuildRequest(val id: String, val responseUrl: String)
 
 @JacksonXmlRootElement
 data class BuildName(val id: String)
