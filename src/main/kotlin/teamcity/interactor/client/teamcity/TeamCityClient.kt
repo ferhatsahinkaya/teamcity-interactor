@@ -10,22 +10,15 @@ import feign.auth.BasicAuthRequestInterceptor
 import feign.jackson.JacksonDecoder
 import feign.jackson.JacksonEncoder
 import feign.slf4j.Slf4jLogger
-import teamcity.interactor.client.ClientFactory
-import teamcity.interactor.config.ConfigReader
 
-private data class TeamCityServerConfig(val username: String, val password: String, val baseUrl: String)
-
-private val TEAM_CITY_SERVER_CONFIG = ConfigReader().config("teamcity-server-config.json", TeamCityServerConfig::class.java)
-val TEAM_CITY_CLIENT_FACTORY = object : ClientFactory<TeamCityClient> {
-    override fun client() =
-            Feign.builder()
-                    .encoder(JacksonEncoder(XmlMapper().registerModule(KotlinModule())))
-                    .decoder(JacksonDecoder(XmlMapper().registerModule(KotlinModule()).disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)))
-                    .logger(Slf4jLogger(TeamCityClient::class.java))
-                    .logLevel(Logger.Level.FULL)
-                    .requestInterceptor(BasicAuthRequestInterceptor(TEAM_CITY_SERVER_CONFIG.username, TEAM_CITY_SERVER_CONFIG.password))
-                    .target(TeamCityClient::class.java, TEAM_CITY_SERVER_CONFIG.baseUrl)
-}
+fun getTeamCityClient(baseUrl: String, username: String, password: String): TeamCityClient =
+        Feign.builder()
+                .encoder(JacksonEncoder(XmlMapper().registerModule(KotlinModule())))
+                .decoder(JacksonDecoder(XmlMapper().registerModule(KotlinModule()).disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)))
+                .logger(Slf4jLogger(TeamCityClient::class.java))
+                .logLevel(Logger.Level.FULL)
+                .requestInterceptor(BasicAuthRequestInterceptor(username, password))
+                .target(TeamCityClient::class.java, baseUrl)
 
 interface TeamCityClient {
     @RequestLine("POST /buildQueue")

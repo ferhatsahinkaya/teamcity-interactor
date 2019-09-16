@@ -1,4 +1,3 @@
-
 package teamcity.interactor.client.reporting
 
 import com.fasterxml.jackson.annotation.JsonFormat
@@ -13,16 +12,13 @@ import feign.Logger
 import feign.RequestLine
 import feign.jackson.JacksonEncoder
 import feign.slf4j.Slf4jLogger
-import teamcity.interactor.client.ClientFactoryForUrl
 
-val REPORTING_CLIENT_FACTORY = object : ClientFactoryForUrl<ReportingClient> {
-    override fun client(url: String) =
-            Feign.builder()
-                    .encoder(JacksonEncoder(ObjectMapper().registerModule(KotlinModule())))
-                    .logger(Slf4jLogger(ReportingClient::class.java))
-                    .logLevel(Logger.Level.FULL)
-                    .target(ReportingClient::class.java, url)
-}
+fun reportingClient(baseUrl: String): ReportingClient =
+        Feign.builder()
+                .encoder(JacksonEncoder(ObjectMapper().registerModule(KotlinModule())))
+                .logger(Slf4jLogger(ReportingClient::class.java))
+                .logLevel(Logger.Level.FULL)
+                .target(ReportingClient::class.java, baseUrl)
 
 interface ReportingClient {
     @RequestLine("POST")
