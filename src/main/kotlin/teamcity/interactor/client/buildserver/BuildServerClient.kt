@@ -32,8 +32,7 @@ interface BuildServerClient {
     fun deleteBuildRequest(buildName: BuildName)
 
     @RequestLine("GET /cancel")
-    @Headers("Accept: application/json",
-            "Content-Type: application/json")
+    @Headers("Accept: application/json")
     fun getCancelRequests(): List<CancelRequest>
 
     @RequestLine("DELETE /cancel")

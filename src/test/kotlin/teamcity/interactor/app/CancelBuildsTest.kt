@@ -23,7 +23,7 @@ import java.util.concurrent.TimeUnit
 import java.util.stream.Stream
 import kotlin.random.Random
 
-class TriggerBuildsTest {
+class CancelBuildsTest {
     private val teamCityUserName = "username-${Random.nextInt()}"
     private val teamCityPassword = "password-${Random.nextInt()}"
     private val buildServer = WireMockServer(wireMockConfig().dynamicPort())
@@ -45,48 +45,48 @@ class TriggerBuildsTest {
     }
 
     data class TestConfiguration(val buildConfigList: List<BuildConfig>,
-                                 val buildServerBuildList: List<BuildServerBuild>,
+                                 val buildServerCancelRequestList: List<BuildServerCancelRequest>,
                                  val teamCityServerBuildList: List<TeamCityServerBuild>,
                                  val buildInformationList: List<BuildInformation>)
 
     data class ReportingMessage(val text: String, val imageUrl: String, val altText: String)
-    data class BuildServerBuild(val name: String, val responseUrl: String)
+    data class BuildServerCancelRequest(val name: String, val responseUrl: String)
     data class TeamCityServerBuild(val name: String, val id: String)
 
     companion object {
         @JvmStatic
-        fun triggerBuildsSuccessfullyTestCases(): Stream<Arguments> =
+        fun cancelBuildsSuccessfullyTestCases(): Stream<Arguments> =
                 Stream.of(
                         Arguments.of(TestConfiguration(
                                 listOf(BuildConfig("teamCityBuildName", setOf("buildServerBuildName"))),
-                                listOf(BuildServerBuild("buildServerBuildName", "responseUrl")),
+                                listOf(BuildServerCancelRequest("buildServerBuildName", "responseUrl")),
                                 listOf(TeamCityServerBuild("teamCityBuildName", "teamCityBuildId")),
                                 listOf(BuildInformation(TeamCityBuild(TeamCityBuildType("teamCityBuildName"), "teamCityBuildId", null, "none", null), "responseUrl")))),
 
                         Arguments.of(TestConfiguration(
                                 listOf(BuildConfig("teamCityBuildName1", setOf("buildServerBuildName1")), BuildConfig("teamCityBuildName2", setOf("buildServerBuildName2"))),
-                                listOf(BuildServerBuild("buildServerBuildName1", "responseUrl1"), BuildServerBuild("buildServerBuildName2", "responseUrl2")),
+                                listOf(BuildServerCancelRequest("buildServerBuildName1", "responseUrl1"), BuildServerCancelRequest("buildServerBuildName2", "responseUrl2")),
                                 listOf(TeamCityServerBuild("teamCityBuildName1", "teamCityBuildId1"), TeamCityServerBuild("teamCityBuildName2", "teamCityBuildId2")),
                                 listOf(BuildInformation(TeamCityBuild(TeamCityBuildType("teamCityBuildName1"), "teamCityBuildId1", null, "none", null), "responseUrl1"),
                                         BuildInformation(TeamCityBuild(TeamCityBuildType("teamCityBuildName2"), "teamCityBuildId2", null, "none", null), "responseUrl2")))))
     }
 
     @Test
-    fun doNotTriggerAnyTeamCityBuildWhenThereIsNoSubmittedBuildRequest() {
+    fun doNotCancelAnyTeamCityBuildWhenThereIsNoSubmittedCancelRequest() {
         val underTest = Application(
                 buildConfigs = listOf(BuildConfig("teamCityBuildName-${Random.nextInt()}", setOf("buildServerBuildName-${Random.nextInt()}"))),
-                jobConfigs = listOf(JobConfig("triggerBuilds", 0, Long.MAX_VALUE)),
+                jobConfigs = listOf(JobConfig("cancelBuilds", 0, Long.MAX_VALUE)),
                 buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
                 teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))
 
-        givenBuildServerReturnsBuilds(emptyList())
+        givenBuildServerReturnsCancelRequests(emptyList())
 
         underTest.run()
 
         // TODO Remove sleep
         TimeUnit.SECONDS.sleep(1)
 
-        buildServer.verify(getRequestedFor(urlEqualTo("/build"))
+        buildServer.verify(getRequestedFor(urlEqualTo("/cancel"))
                 .withHeader("Accept", equalTo("application/json")))
 
         teamCityServer.verify(0, allRequests())
@@ -95,16 +95,18 @@ class TriggerBuildsTest {
     }
 
     @Test
-    fun reportBuildNotFoundWhenSubmittedBuildRequestCannotBeMappedToABuildConfiguration() {
+    fun reportBuildNotFoundWhenSubmittedCancelRequestCannotBeMappedToAnExistingBuild() {
         val underTest = Application(
                 buildConfigs = listOf(BuildConfig("teamCityBuildName-${Random.nextInt()}", setOf("buildServerBuildName-${Random.nextInt()}"))),
-                jobConfigs = listOf(JobConfig("triggerBuilds", 0, Long.MAX_VALUE)),
+                jobConfigs = listOf(JobConfig("cancelBuilds", 0, Long.MAX_VALUE)),
                 buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
                 teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))
-        val reportingMessage = ReportingMessage("buildName build is not found", "https://cdn3.iconfinder.com/data/icons/network-and-communications-8/32/network_Error_lost_no_page_not_found-512.png", "Not Found")
+        val reportingMessage = ReportingMessage("No queued/running buildName build is found", "https://cdn3.iconfinder.com/data/icons/network-and-communications-8/32/network_Error_lost_no_page_not_found-512.png", "Not Found")
+        val buildInformationList = listOf(BuildInformation(TeamCityBuild(TeamCityBuildType("teamCityBuildName"), "teamCityBuildId", null, "running", null), "responseUrl"))
+        underTest.setBuilds { buildInformationList }
 
-        givenBuildServerReturnsBuilds(listOf(BuildServerBuild("buildName", "${slackServer.baseUrl()}/responseUrl")))
-        givenBuildServerDeletesBuildsSuccessfully(listOf("buildName"))
+        givenBuildServerReturnsCancelRequests(listOf(BuildServerCancelRequest("buildName", "${slackServer.baseUrl()}/responseUrl")))
+        givenBuildServerDeletesCancelRequestsSuccessfully(listOf("buildName"))
         givenSlackServerAcceptsReportingMessages("/responseUrl", listOf(reportingMessage))
 
         underTest.run()
@@ -112,48 +114,49 @@ class TriggerBuildsTest {
         // TODO Remove sleep
         TimeUnit.SECONDS.sleep(1)
 
-        buildServer.verify(getRequestedFor(urlEqualTo("/build"))
+        buildServer.verify(getRequestedFor(urlEqualTo("/cancel"))
                 .withHeader("Accept", equalTo("application/json")))
 
-        verifyBuildServerDeleteBuildsIsCalled(listOf("buildName"))
+        verifyBuildServerDeleteCancelRequestsIsCalled(listOf("buildName"))
         verifySlackServerReportMessagesIsCalled("/responseUrl", listOf(reportingMessage))
 
-        assertThat(underTest.getBuilds(), empty())
+        assertThat(underTest.getBuilds(), contains(*buildInformationList.toTypedArray()))
     }
 
     // TODO Use better display names for parameterized test rows
     @ParameterizedTest
-    @MethodSource("triggerBuildsSuccessfullyTestCases")
-    fun triggerBuilds(testConfig: TestConfiguration) {
+    @MethodSource("cancelBuildsSuccessfullyTestCases")
+    fun cancelBuilds(testConfig: TestConfiguration) {
         val underTest = Application(
                 buildConfigs = testConfig.buildConfigList,
-                jobConfigs = listOf(JobConfig("triggerBuilds", 0, Long.MAX_VALUE)),
+                jobConfigs = listOf(JobConfig("cancelBuilds", 0, Long.MAX_VALUE)),
                 buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
                 teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))
+        underTest.setBuilds { testConfig.buildInformationList }
 
-        givenBuildServerReturnsBuilds(testConfig.buildServerBuildList)
-        givenBuildServerDeletesBuildsSuccessfully(testConfig.buildServerBuildList.map { it.name })
-        givenTeamCityServerCreatesBuildsSuccessfully(testConfig.teamCityServerBuildList)
+        givenBuildServerReturnsCancelRequests(testConfig.buildServerCancelRequestList)
+        givenTeamCityServerCancelsBuildsSuccessfully(testConfig.teamCityServerBuildList.map { it.id })
+        givenBuildServerDeletesCancelRequestsSuccessfully(testConfig.buildServerCancelRequestList.map { it.name })
 
         underTest.run()
 
         // TODO Remove sleep
         TimeUnit.SECONDS.sleep(1)
 
-        verifyBuildServerGetBuildsIsCalled()
-        verifyTeamCityServerBuildIsCalledFor(testConfig.teamCityServerBuildList.map { it.name })
-        verifyBuildServerDeleteBuildsIsCalled(testConfig.buildServerBuildList.map { it.name })
+        verifyBuildServerGetCancelRequestsIsCalled()
+        verifyTeamCityServerCancelRequestsIsCalledFor(testConfig.teamCityServerBuildList.map { it.id })
+        verifyBuildServerDeleteCancelRequestsIsCalled(testConfig.buildServerCancelRequestList.map { it.name })
 
         assertThat(underTest.getBuilds(), contains(*testConfig.buildInformationList.toTypedArray()))
     }
 
-    private fun givenBuildServerReturnsBuilds(builds: List<BuildServerBuild>) =
-            buildServer.stubFor(get(urlEqualTo("/build"))
+    private fun givenBuildServerReturnsCancelRequests(cancelRequests: List<BuildServerCancelRequest>) =
+            buildServer.stubFor(get(urlEqualTo("/cancel"))
                     .withHeader("Accept", equalTo("application/json"))
                     .willReturn(aResponse()
                             .withStatus(200)
                             .withBody(toJSONString(
-                                    builds.map {
+                                    cancelRequests.map {
                                         mapOf(
                                                 "id" to it.name,
                                                 "responseUrl" to it.responseUrl)
@@ -180,10 +183,10 @@ class TriggerBuildsTest {
                                             })))))
 
 
-    private fun givenBuildServerDeletesBuildsSuccessfully(buildServerBuildNames: List<String>) =
+    private fun givenBuildServerDeletesCancelRequestsSuccessfully(buildServerBuildNames: List<String>) =
             buildServerBuildNames
                     .forEach {
-                        buildServer.stubFor(delete(urlEqualTo("/build"))
+                        buildServer.stubFor(delete(urlEqualTo("/cancel"))
                                 .withHeader("Content-Type", equalTo("application/json"))
                                 .withRequestBody(equalToJson(toJSONString(mapOf("id" to it))))
                                 .willReturn(aResponse()
@@ -191,38 +194,37 @@ class TriggerBuildsTest {
                     }
 
     // TODO Find xml builder
-    private fun givenTeamCityServerCreatesBuildsSuccessfully(teamCityBuilds: List<TeamCityServerBuild>) =
-            teamCityBuilds
+    private fun givenTeamCityServerCancelsBuildsSuccessfully(teamCityBuildIds: List<String>) =
+            teamCityBuildIds
                     .forEach {
-                        teamCityServer.stubFor(post(urlEqualTo("/buildQueue"))
+                        teamCityServer.stubFor(post(urlEqualTo("/buildQueue/id:$it"))
                                 .withHeader("Accept", equalTo("application/xml"))
                                 .withHeader("Content-Type", equalTo("application/xml"))
                                 .withBasicAuth(teamCityUserName, teamCityPassword)
-                                .withRequestBody(equalToXml("<build><buildType id=\"${it.name}\"/></build>"))
+                                .withRequestBody(equalToXml("<buildCancelRequest><comment>Build cancelled by the user</comment><readIntoQueue>true</readIntoQueue></buildCancelRequest>"))
                                 .willReturn(aResponse()
-                                        .withStatus(200)
-                                        .withBody("<build><buildType id=\"${it.name}\"></buildType><id>${it.id}</id><state>some-state-${Random.nextInt(100)}</state></build>")))
+                                        .withStatus(200)))
                     }
 
-    private fun verifyBuildServerGetBuildsIsCalled() =
-            buildServer.verify(getRequestedFor(urlEqualTo("/build"))
+    private fun verifyBuildServerGetCancelRequestsIsCalled() =
+            buildServer.verify(getRequestedFor(urlEqualTo("/cancel"))
                     .withHeader("Accept", equalTo("application/json")))
 
     // TODO Find xml builder
-    private fun verifyTeamCityServerBuildIsCalledFor(teamCityBuildNames: List<String>) =
-            teamCityBuildNames
+    private fun verifyTeamCityServerCancelRequestsIsCalledFor(teamCityBuildIds: List<String>) =
+            teamCityBuildIds
                     .forEach {
-                        teamCityServer.verify(postRequestedFor(urlEqualTo("/buildQueue"))
+                        teamCityServer.verify(postRequestedFor(urlEqualTo("/buildQueue/id:$it"))
                                 .withHeader("Accept", equalTo("application/xml"))
                                 .withHeader("Content-Type", equalTo("application/xml"))
                                 .withBasicAuth(BasicCredentials(teamCityUserName, teamCityPassword))
-                                .withRequestBody(equalToXml("<build><buildType id=\"$it\"/></build>")))
+                                .withRequestBody(equalToXml("<buildCancelRequest><comment>Build cancelled by the user</comment><readIntoQueue>true</readIntoQueue></buildCancelRequest>")))
                     }
 
-    private fun verifyBuildServerDeleteBuildsIsCalled(teamCityBuildNames: List<String>) =
+    private fun verifyBuildServerDeleteCancelRequestsIsCalled(teamCityBuildNames: List<String>) =
             teamCityBuildNames
                     .forEach {
-                        buildServer.verify(deleteRequestedFor(urlEqualTo("/build"))
+                        buildServer.verify(deleteRequestedFor(urlEqualTo("/cancel"))
                                 .withHeader("Content-Type", equalTo("application/json"))
                                 .withRequestBody(equalToJson(toJSONString(mapOf("id" to it)))))
                     }
