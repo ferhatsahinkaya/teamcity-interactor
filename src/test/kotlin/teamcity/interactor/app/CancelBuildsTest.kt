@@ -149,7 +149,7 @@ class CancelBuildsTest {
     }
 
     @Test
-    fun cancelBuildsWithIdOnceWhenThereAreMultipleCancelRequestsWithSameId() {
+    fun cancelBuildsWithIdOnceWhenThereAreMultipleCancelRequestsWithSameBuildServerName() {
         val underTest = Application(
                 buildConfigs = listOf(BuildConfig("teamCityBuildName1", setOf("buildServerName1")), BuildConfig("teamCityBuildName2", setOf("buildServerName2"))),
                 jobConfigs = listOf(JobConfig("cancelBuilds", 0, Long.MAX_VALUE)),
@@ -160,7 +160,9 @@ class CancelBuildsTest {
                 BuildInformation(TeamCityBuild(TeamCityBuildType("teamCityBuildName1"), "teamCityBuildId2", "teamCityBuildNumber2", "queued", "SUCCESS"), "responseUrl2"))
         underTest.setBuilds { buildInformationList }
 
-        givenBuildServerReturnsCancelRequests(listOf(BuildServerCancelRequest("buildServerName1", "${slackServer.baseUrl()}/responseUrl")))
+        givenBuildServerReturnsCancelRequests(listOf(
+                BuildServerCancelRequest("buildServerName1", "${slackServer.baseUrl()}/responseUrl1"),
+                BuildServerCancelRequest("buildServerName1", "${slackServer.baseUrl()}/responseUrl2")))
         givenTeamCityServerCancelsBuildsSuccessfully(listOf("teamCityBuildId1", "teamCityBuildId2"))
         givenBuildServerDeletesCancelRequestsSuccessfully(listOf("buildServerName1"))
 
@@ -172,6 +174,38 @@ class CancelBuildsTest {
         verifyBuildServerGetCancelRequestsIsCalled()
         verifyTeamCityServerCancelRequestsIsCalledFor(listOf("teamCityBuildId1", "teamCityBuildId2"))
         verifyBuildServerDeleteCancelRequestsIsCalled(listOf("buildServerName1"))
+
+        assertThat(underTest.getBuilds(), contains(*buildInformationList.toTypedArray()))
+    }
+
+    @Test
+    fun cancelBuildsOnceWhenThereAreCancelRequestsForAlternativeNamesOfSameTeamCityBuild() {
+        val underTest = Application(
+                buildConfigs = listOf(BuildConfig("teamCityBuildName1.1", setOf("buildServerName1.1", "buildServerName1.2", "buildServerName1.3")), BuildConfig("teamCityBuildName2", setOf("buildServerName2"))),
+                jobConfigs = listOf(JobConfig("cancelBuilds", 0, Long.MAX_VALUE)),
+                buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
+                teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))
+        val buildInformationList = listOf(
+                BuildInformation(TeamCityBuild(TeamCityBuildType("teamCityBuildName1.1"), "teamCityBuildId1.1", "teamCityBuildNumber1.1", "running", "SUCCESS"), "responseUrl1.1"),
+                BuildInformation(TeamCityBuild(TeamCityBuildType("teamCityBuildName1.1"), "teamCityBuildId1.2", "teamCityBuildNumber1.2", "queued", "SUCCESS"), "responseUrl1.2"),
+                BuildInformation(TeamCityBuild(TeamCityBuildType("teamCityBuildName2"), "teamCityBuildId2", "teamCityBuildNumber2", "running", "SUCCESS"), "responseUrl2"),
+                BuildInformation(TeamCityBuild(TeamCityBuildType("teamCityBuildName3"), "teamCityBuildId3", "teamCityBuildNumber3", "queued", "SUCCESS"), "responseUrl3"))
+        underTest.setBuilds { buildInformationList }
+
+        givenBuildServerReturnsCancelRequests(listOf(
+                BuildServerCancelRequest("buildServerName1.1", "${slackServer.baseUrl()}/responseUrl"),
+                BuildServerCancelRequest("buildServerName1.2", "${slackServer.baseUrl()}/responseUrl")))
+        givenTeamCityServerCancelsBuildsSuccessfully(listOf("teamCityBuildId1.1", "teamCityBuildId1.2"))
+        givenBuildServerDeletesCancelRequestsSuccessfully(listOf("buildServerName1.1", "buildServerName1.2"))
+
+        underTest.run()
+
+        // TODO Remove sleep
+        TimeUnit.SECONDS.sleep(1)
+
+        verifyBuildServerGetCancelRequestsIsCalled()
+        verifyTeamCityServerCancelRequestsIsCalledFor(listOf("teamCityBuildId1.1", "teamCityBuildId1.2"))
+        verifyBuildServerDeleteCancelRequestsIsCalled(listOf("buildServerName1.1", "buildServerName1.2"))
 
         assertThat(underTest.getBuilds(), contains(*buildInformationList.toTypedArray()))
     }

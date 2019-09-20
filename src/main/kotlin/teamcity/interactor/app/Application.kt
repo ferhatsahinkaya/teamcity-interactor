@@ -76,12 +76,10 @@ class Application internal constructor(private val buildConfigs: List<BuildConfi
 
         job("cancelBuilds") {
             buildServerClient.getCancelRequests()
-                    .distinctBy { it.id }
-                    .forEach { cancelRequest ->
-                        buildConfigs.firstOrNull { buildConfig -> buildConfig.names.any { teamCityBuildName -> teamCityBuildName.equals(cancelRequest.id, true) } }
-                                ?.id
-                                ?.let { buildConfigId -> builds.filter { buildInformation -> buildConfigId == buildInformation.teamCityBuild.buildType.id }.map { it.teamCityBuild.id } }
-                                ?.takeIf { it.isNotEmpty() }
+                    .groupBy { cancelRequest -> buildConfigs.firstOrNull { buildConfig -> buildConfig.names.any { name -> name.equals(cancelRequest.id, true) } }?.id }
+                    .forEach { entry ->
+                        entry.key
+                                ?.let { builds.filter { buildInformation -> it == buildInformation.teamCityBuild.buildType.id }.map { it.teamCityBuild.id } }
                                 ?.forEach {
                                     try {
                                         teamCityClient.cancel("buildQueue", it)
@@ -90,12 +88,19 @@ class Application internal constructor(private val buildConfigs: List<BuildConfi
                                     }
                                 }
                                 ?: run {
-                                    reportingClient(cancelRequest.responseUrl).report(Report(
-                                            listOf(ReportingMessage(
-                                                    text = Text(text = "No queued/running ${cancelRequest.id} build is found"),
-                                                    buildStatus = NotFound))))
+                                    entry.value.forEach {
+                                        reportingClient(it.responseUrl).report(Report(
+                                                listOf(ReportingMessage(
+                                                        text = Text(text = "No queued/running ${it.id} build is found"),
+                                                        buildStatus = NotFound))))
+                                    }
                                 }
-                        buildServerClient.deleteCancelRequest(BuildName(cancelRequest.id))
+
+                        entry.value
+                                .map { it.id }
+                                .distinct()
+                                .map { BuildName(it) }
+                                .forEach { buildServerClient.deleteCancelRequest(it) }
                     }
         }
     }
