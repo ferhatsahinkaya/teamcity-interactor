@@ -7,6 +7,7 @@ import com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig
 import com.github.tomakehurst.wiremock.matching.RequestPatternBuilder.allRequests
 import net.minidev.json.JSONArray.toJSONString
 import net.minidev.json.JSONObject.toJSONString
+import org.awaitility.Awaitility.await
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.contains
 import org.hamcrest.Matchers.empty
@@ -20,6 +21,7 @@ import teamcity.interactor.app.Application.BuildInformation
 import teamcity.interactor.client.teamcity.TeamCityBuild
 import teamcity.interactor.client.teamcity.TeamCityBuildType
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeUnit.SECONDS
 import java.util.stream.Stream
 import kotlin.random.Random
 
@@ -83,13 +85,13 @@ class CancelBuildsTest {
 
         underTest.run()
 
-        // TODO Remove sleep
-        TimeUnit.SECONDS.sleep(1)
+        await().atMost(2, SECONDS)
+                .untilAsserted {
+                    verifyBuildServerGetCancelRequestsIsCalled()
+                    teamCityServer.verify(0, allRequests())
 
-        verifyBuildServerGetCancelRequestsIsCalled()
-        teamCityServer.verify(0, allRequests())
-
-        assertThat(underTest.getBuilds(), empty())
+                    assertThat(underTest.getBuilds(), empty())
+                }
     }
 
     @Test
@@ -109,14 +111,14 @@ class CancelBuildsTest {
 
         underTest.run()
 
-        // TODO Remove sleep
-        TimeUnit.SECONDS.sleep(1)
+        await().atMost(2, SECONDS)
+                .untilAsserted {
+                    verifyBuildServerGetCancelRequestsIsCalled()
+                    verifyBuildServerDeleteCancelRequestsIsCalled(listOf("buildName"))
+                    verifySlackServerReportMessagesIsCalled("/responseUrl", listOf(reportingMessage))
 
-        verifyBuildServerGetCancelRequestsIsCalled()
-        verifyBuildServerDeleteCancelRequestsIsCalled(listOf("buildName"))
-        verifySlackServerReportMessagesIsCalled("/responseUrl", listOf(reportingMessage))
-
-        assertThat(underTest.getBuilds(), contains(*buildInformationList.toTypedArray()))
+                    assertThat(underTest.getBuilds(), contains(*buildInformationList.toTypedArray()))
+                }
     }
 
     @Test
@@ -138,14 +140,14 @@ class CancelBuildsTest {
 
         underTest.run()
 
-        // TODO Remove sleep
-        TimeUnit.SECONDS.sleep(1)
+        await().atMost(2, SECONDS)
+                .untilAsserted {
+                    verifyBuildServerGetCancelRequestsIsCalled()
+                    verifyTeamCityServerCancelRequestsIsCalledFor(listOf("teamCityBuildId1"))
+                    verifyBuildServerDeleteCancelRequestsIsCalled(listOf("buildServerName1.3"))
 
-        verifyBuildServerGetCancelRequestsIsCalled()
-        verifyTeamCityServerCancelRequestsIsCalledFor(listOf("teamCityBuildId1"))
-        verifyBuildServerDeleteCancelRequestsIsCalled(listOf("buildServerName1.3"))
-
-        assertThat(underTest.getBuilds(), contains(*buildInformationList.toTypedArray()))
+                    assertThat(underTest.getBuilds(), contains(*buildInformationList.toTypedArray()))
+                }
     }
 
     @Test
@@ -168,14 +170,14 @@ class CancelBuildsTest {
 
         underTest.run()
 
-        // TODO Remove sleep
-        TimeUnit.SECONDS.sleep(1)
+        await().atMost(2, TimeUnit.SECONDS)
+                .untilAsserted {
+                    verifyBuildServerGetCancelRequestsIsCalled()
+                    verifyTeamCityServerCancelRequestsIsCalledFor(listOf("teamCityBuildId1", "teamCityBuildId2"))
+                    verifyBuildServerDeleteCancelRequestsIsCalled(listOf("buildServerName1"))
 
-        verifyBuildServerGetCancelRequestsIsCalled()
-        verifyTeamCityServerCancelRequestsIsCalledFor(listOf("teamCityBuildId1", "teamCityBuildId2"))
-        verifyBuildServerDeleteCancelRequestsIsCalled(listOf("buildServerName1"))
-
-        assertThat(underTest.getBuilds(), contains(*buildInformationList.toTypedArray()))
+                    assertThat(underTest.getBuilds(), contains(*buildInformationList.toTypedArray()))
+                }
     }
 
     @Test
@@ -200,14 +202,14 @@ class CancelBuildsTest {
 
         underTest.run()
 
-        // TODO Remove sleep
-        TimeUnit.SECONDS.sleep(1)
+        await().atMost(2, SECONDS)
+                .untilAsserted {
+                    verifyBuildServerGetCancelRequestsIsCalled()
+                    verifyTeamCityServerCancelRequestsIsCalledFor(listOf("teamCityBuildId1.1", "teamCityBuildId1.2"))
+                    verifyBuildServerDeleteCancelRequestsIsCalled(listOf("buildServerName1.1", "buildServerName1.2"))
 
-        verifyBuildServerGetCancelRequestsIsCalled()
-        verifyTeamCityServerCancelRequestsIsCalledFor(listOf("teamCityBuildId1.1", "teamCityBuildId1.2"))
-        verifyBuildServerDeleteCancelRequestsIsCalled(listOf("buildServerName1.1", "buildServerName1.2"))
-
-        assertThat(underTest.getBuilds(), contains(*buildInformationList.toTypedArray()))
+                    assertThat(underTest.getBuilds(), contains(*buildInformationList.toTypedArray()))
+                }
     }
 
     // TODO Use better display names for parameterized test rows
@@ -227,14 +229,14 @@ class CancelBuildsTest {
 
         underTest.run()
 
-        // TODO Remove sleep
-        TimeUnit.SECONDS.sleep(1)
+        await().atMost(2, TimeUnit.SECONDS)
+                .untilAsserted {
+                    verifyBuildServerGetCancelRequestsIsCalled()
+                    verifyTeamCityServerCancelRequestsIsCalledFor(testConfig.teamCityServerBuildList.map { it.id })
+                    verifyBuildServerDeleteCancelRequestsIsCalled(testConfig.buildServerCancelRequestList.map { it.name })
 
-        verifyBuildServerGetCancelRequestsIsCalled()
-        verifyTeamCityServerCancelRequestsIsCalledFor(testConfig.teamCityServerBuildList.map { it.id })
-        verifyBuildServerDeleteCancelRequestsIsCalled(testConfig.buildServerCancelRequestList.map { it.name })
-
-        assertThat(underTest.getBuilds(), contains(*testConfig.buildInformationList.toTypedArray()))
+                    assertThat(underTest.getBuilds(), contains(*testConfig.buildInformationList.toTypedArray()))
+                }
     }
 
     private fun givenBuildServerReturnsCancelRequests(cancelRequests: List<BuildServerCancelRequest>) =

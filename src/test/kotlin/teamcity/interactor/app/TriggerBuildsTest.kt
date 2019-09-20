@@ -7,6 +7,7 @@ import com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig
 import com.github.tomakehurst.wiremock.matching.RequestPatternBuilder.allRequests
 import net.minidev.json.JSONArray.toJSONString
 import net.minidev.json.JSONObject.toJSONString
+import org.awaitility.Awaitility.await
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.contains
 import org.hamcrest.Matchers.empty
@@ -19,7 +20,7 @@ import org.junit.jupiter.params.provider.MethodSource
 import teamcity.interactor.app.Application.BuildInformation
 import teamcity.interactor.client.teamcity.TeamCityBuild
 import teamcity.interactor.client.teamcity.TeamCityBuildType
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeUnit.SECONDS
 import java.util.stream.Stream
 import kotlin.random.Random
 
@@ -83,15 +84,14 @@ class TriggerBuildsTest {
 
         underTest.run()
 
-        // TODO Remove sleep
-        TimeUnit.SECONDS.sleep(1)
+        await().atMost(2, SECONDS)
+                .untilAsserted {
+                    verifyBuildServerGetBuildsIsCalled()
 
-        buildServer.verify(getRequestedFor(urlEqualTo("/build"))
-                .withHeader("Accept", equalTo("application/json")))
+                    teamCityServer.verify(0, allRequests())
 
-        teamCityServer.verify(0, allRequests())
-
-        assertThat(underTest.getBuilds(), empty())
+                    assertThat(underTest.getBuilds(), empty())
+                }
     }
 
     @Test
@@ -109,16 +109,14 @@ class TriggerBuildsTest {
 
         underTest.run()
 
-        // TODO Remove sleep
-        TimeUnit.SECONDS.sleep(1)
+        await().atMost(2, SECONDS)
+                .untilAsserted {
+                    verifyBuildServerGetBuildsIsCalled()
+                    verifyBuildServerDeleteBuildsIsCalled(listOf("buildName"))
+                    verifySlackServerReportMessagesIsCalled("/responseUrl", listOf(reportingMessage))
 
-        buildServer.verify(getRequestedFor(urlEqualTo("/build"))
-                .withHeader("Accept", equalTo("application/json")))
-
-        verifyBuildServerDeleteBuildsIsCalled(listOf("buildName"))
-        verifySlackServerReportMessagesIsCalled("/responseUrl", listOf(reportingMessage))
-
-        assertThat(underTest.getBuilds(), empty())
+                    assertThat(underTest.getBuilds(), empty())
+                }
     }
 
     // TODO Use better display names for parameterized test rows
@@ -137,14 +135,14 @@ class TriggerBuildsTest {
 
         underTest.run()
 
-        // TODO Remove sleep
-        TimeUnit.SECONDS.sleep(1)
+        await().atMost(2, SECONDS)
+                .untilAsserted {
+                    verifyBuildServerGetBuildsIsCalled()
+                    verifyTeamCityServerBuildIsCalledFor(testConfig.teamCityServerBuildList.map { it.name })
+                    verifyBuildServerDeleteBuildsIsCalled(testConfig.buildServerBuildList.map { it.name })
 
-        verifyBuildServerGetBuildsIsCalled()
-        verifyTeamCityServerBuildIsCalledFor(testConfig.teamCityServerBuildList.map { it.name })
-        verifyBuildServerDeleteBuildsIsCalled(testConfig.buildServerBuildList.map { it.name })
-
-        assertThat(underTest.getBuilds(), contains(*testConfig.buildInformationList.toTypedArray()))
+                    assertThat(underTest.getBuilds(), contains(*testConfig.buildInformationList.toTypedArray()))
+                }
     }
 
     private fun givenBuildServerReturnsBuilds(builds: List<BuildServerBuild>) =
