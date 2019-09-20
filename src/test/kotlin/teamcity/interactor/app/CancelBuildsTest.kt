@@ -86,9 +86,7 @@ class CancelBuildsTest {
         // TODO Remove sleep
         TimeUnit.SECONDS.sleep(1)
 
-        buildServer.verify(getRequestedFor(urlEqualTo("/cancel"))
-                .withHeader("Accept", equalTo("application/json")))
-
+        verifyBuildServerGetCancelRequestsIsCalled()
         teamCityServer.verify(0, allRequests())
 
         assertThat(underTest.getBuilds(), empty())
@@ -114,11 +112,66 @@ class CancelBuildsTest {
         // TODO Remove sleep
         TimeUnit.SECONDS.sleep(1)
 
-        buildServer.verify(getRequestedFor(urlEqualTo("/cancel"))
-                .withHeader("Accept", equalTo("application/json")))
-
+        verifyBuildServerGetCancelRequestsIsCalled()
         verifyBuildServerDeleteCancelRequestsIsCalled(listOf("buildName"))
         verifySlackServerReportMessagesIsCalled("/responseUrl", listOf(reportingMessage))
+
+        assertThat(underTest.getBuilds(), contains(*buildInformationList.toTypedArray()))
+    }
+
+    @Test
+    fun cancelBuildsWithAlternativeBuildServerName() {
+        val underTest = Application(
+                buildConfigs = listOf(BuildConfig("teamCityBuildName1", setOf("buildServerName1.1", "buildServerName1.2", "buildServerName1.3")), BuildConfig("teamCityBuildName2", setOf("buildServerName2"))),
+                jobConfigs = listOf(JobConfig("cancelBuilds", 0, Long.MAX_VALUE)),
+                buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
+                teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))
+        val buildInformationList = listOf(
+                BuildInformation(TeamCityBuild(TeamCityBuildType("teamCityBuildName1"), "teamCityBuildId1", "teamCityBuildNumber1", "running", "SUCCESS"), "responseUrl1"),
+                BuildInformation(TeamCityBuild(TeamCityBuildType("teamCityBuildName2"), "teamCityBuildId2", "teamCityBuildNumber2", "running", "SUCCESS"), "responseUrl2"),
+                BuildInformation(TeamCityBuild(TeamCityBuildType("teamCityBuildName3"), "teamCityBuildId3", "teamCityBuildNumber3", "queued", "SUCCESS"), "responseUrl3"))
+        underTest.setBuilds { buildInformationList }
+
+        givenBuildServerReturnsCancelRequests(listOf(BuildServerCancelRequest("buildServerName1.3", "${slackServer.baseUrl()}/responseUrl")))
+        givenTeamCityServerCancelsBuildsSuccessfully(listOf("teamCityBuildId1"))
+        givenBuildServerDeletesCancelRequestsSuccessfully(listOf("buildServerName1.3"))
+
+        underTest.run()
+
+        // TODO Remove sleep
+        TimeUnit.SECONDS.sleep(1)
+
+        verifyBuildServerGetCancelRequestsIsCalled()
+        verifyTeamCityServerCancelRequestsIsCalledFor(listOf("teamCityBuildId1"))
+        verifyBuildServerDeleteCancelRequestsIsCalled(listOf("buildServerName1.3"))
+
+        assertThat(underTest.getBuilds(), contains(*buildInformationList.toTypedArray()))
+    }
+
+    @Test
+    fun cancelBuildsWithIdOnceWhenThereAreMultipleCancelRequestsWithSameId() {
+        val underTest = Application(
+                buildConfigs = listOf(BuildConfig("teamCityBuildName1", setOf("buildServerName1")), BuildConfig("teamCityBuildName2", setOf("buildServerName2"))),
+                jobConfigs = listOf(JobConfig("cancelBuilds", 0, Long.MAX_VALUE)),
+                buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
+                teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))
+        val buildInformationList = listOf(
+                BuildInformation(TeamCityBuild(TeamCityBuildType("teamCityBuildName1"), "teamCityBuildId1", "teamCityBuildNumber1", "running", null), "responseUrl1"),
+                BuildInformation(TeamCityBuild(TeamCityBuildType("teamCityBuildName1"), "teamCityBuildId2", "teamCityBuildNumber2", "queued", "SUCCESS"), "responseUrl2"))
+        underTest.setBuilds { buildInformationList }
+
+        givenBuildServerReturnsCancelRequests(listOf(BuildServerCancelRequest("buildServerName1", "${slackServer.baseUrl()}/responseUrl")))
+        givenTeamCityServerCancelsBuildsSuccessfully(listOf("teamCityBuildId1", "teamCityBuildId2"))
+        givenBuildServerDeletesCancelRequestsSuccessfully(listOf("buildServerName1"))
+
+        underTest.run()
+
+        // TODO Remove sleep
+        TimeUnit.SECONDS.sleep(1)
+
+        verifyBuildServerGetCancelRequestsIsCalled()
+        verifyTeamCityServerCancelRequestsIsCalledFor(listOf("teamCityBuildId1", "teamCityBuildId2"))
+        verifyBuildServerDeleteCancelRequestsIsCalled(listOf("buildServerName1"))
 
         assertThat(underTest.getBuilds(), contains(*buildInformationList.toTypedArray()))
     }
@@ -207,14 +260,14 @@ class CancelBuildsTest {
                     }
 
     private fun verifyBuildServerGetCancelRequestsIsCalled() =
-            buildServer.verify(getRequestedFor(urlEqualTo("/cancel"))
+            buildServer.verify(1, getRequestedFor(urlEqualTo("/cancel"))
                     .withHeader("Accept", equalTo("application/json")))
 
     // TODO Find xml builder
     private fun verifyTeamCityServerCancelRequestsIsCalledFor(teamCityBuildIds: List<String>) =
             teamCityBuildIds
                     .forEach {
-                        teamCityServer.verify(postRequestedFor(urlEqualTo("/buildQueue/id:$it"))
+                        teamCityServer.verify(1, postRequestedFor(urlEqualTo("/buildQueue/id:$it"))
                                 .withHeader("Accept", equalTo("application/xml"))
                                 .withHeader("Content-Type", equalTo("application/xml"))
                                 .withBasicAuth(BasicCredentials(teamCityUserName, teamCityPassword))
@@ -224,13 +277,13 @@ class CancelBuildsTest {
     private fun verifyBuildServerDeleteCancelRequestsIsCalled(teamCityBuildNames: List<String>) =
             teamCityBuildNames
                     .forEach {
-                        buildServer.verify(deleteRequestedFor(urlEqualTo("/cancel"))
+                        buildServer.verify(1, deleteRequestedFor(urlEqualTo("/cancel"))
                                 .withHeader("Content-Type", equalTo("application/json"))
                                 .withRequestBody(equalToJson(toJSONString(mapOf("id" to it)))))
                     }
 
     private fun verifySlackServerReportMessagesIsCalled(responseUrl: String, reportingMessages: List<ReportingMessage>) =
-            slackServer.verify(postRequestedFor(urlEqualTo(responseUrl))
+            slackServer.verify(1, postRequestedFor(urlEqualTo(responseUrl))
                     .withHeader("Content-Type", equalTo("application/json"))
                     .withRequestBody(equalToJson(toJSONString(mapOf(
                             "blocks" to reportingMessages
