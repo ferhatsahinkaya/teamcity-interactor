@@ -65,7 +65,7 @@ class Application internal constructor(private val buildConfigs: List<BuildConfi
                                 val buildStatus = BuildStatus.of(latestTeamCityBuild.state, latestTeamCityBuild.status)
                                 reportingClient(buildInformation.responseUrl).report(Report(
                                         listOf(ReportingMessage(
-                                                text = Text(text = "*${latestTeamCityBuild.buildType.id}* build ${latestTeamCityBuild.number?.let { "*$it* " }.orEmpty()}is ${buildStatus.displayName}"),
+                                                text = Text(text = "*${latestTeamCityBuild.buildType.name}* build ${latestTeamCityBuild.number?.let { "*$it* " }.orEmpty()}is ${buildStatus.displayName}"),
                                                 buildStatus = buildStatus))))
                             }
                     if (latestTeamCityBuild.state != "finished") BuildInformation(latestTeamCityBuild, buildInformation.responseUrl) else null

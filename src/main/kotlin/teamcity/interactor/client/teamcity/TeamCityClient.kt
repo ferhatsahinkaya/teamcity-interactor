@@ -44,7 +44,7 @@ data class TeamCityBuild(val buildType: TeamCityBuildType, val id: String, val n
 data class TeamCityBuildRequest(val buildType: TeamCityBuildType)
 
 @JacksonXmlRootElement(localName = "buildType")
-data class TeamCityBuildType(@JacksonXmlProperty(isAttribute = true) val id: String)
+data class TeamCityBuildType(@JacksonXmlProperty(isAttribute = true) val id: String, @JacksonXmlProperty(isAttribute = true) val name: String? = null)
 
 @JacksonXmlRootElement(localName = "buildCancelRequest")
 data class TeamCityCancelRequest(val comment: String = "Build cancelled by the user", val readIntoQueue: Boolean = true)
