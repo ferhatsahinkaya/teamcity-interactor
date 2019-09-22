@@ -212,6 +212,7 @@ class CancelBuildsTest {
                 }
     }
 
+    // TODO Test cases where buildQueue returns 404, but build cancel returns success
     // TODO Use better display names for parameterized test rows
     @ParameterizedTest
     @MethodSource("cancelBuildsSuccessfullyTestCases")
