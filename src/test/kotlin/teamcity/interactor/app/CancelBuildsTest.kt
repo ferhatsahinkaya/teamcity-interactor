@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
+import org.junit.jupiter.params.provider.ValueSource
 import teamcity.interactor.app.Application.BuildInformation
 import teamcity.interactor.client.teamcity.TeamCityBuild
 import teamcity.interactor.client.teamcity.TeamCityBuildType
@@ -53,7 +54,8 @@ class CancelBuildsTest {
 
     data class ReportingMessage(val text: String, val imageUrl: String, val altText: String)
     data class BuildServerCancelRequest(val name: String, val responseUrl: String)
-    data class TeamCityServerBuild(val name: String, val id: String)
+    data class TeamCityServerBuild(val name: String, val id: String, val resourcePath: String)
+    data class TeamCityServerIdToResourcePath(val id: String, val resourcePath: String)
 
     companion object {
         @JvmStatic
@@ -62,13 +64,26 @@ class CancelBuildsTest {
                         Arguments.of(TestConfiguration(
                                 listOf(BuildConfig("teamCityBuildName", setOf("buildServerBuildName"))),
                                 listOf(BuildServerCancelRequest("buildServerBuildName", "responseUrl")),
-                                listOf(TeamCityServerBuild("teamCityBuildName", "teamCityBuildId")),
+                                listOf(TeamCityServerBuild("teamCityBuildName", "teamCityBuildId", "buildQueue")),
+                                listOf(BuildInformation(TeamCityBuild(TeamCityBuildType("teamCityBuildName"), "teamCityBuildId", null, "none", null), "responseUrl")))),
+
+                        Arguments.of(TestConfiguration(
+                                listOf(BuildConfig("teamCityBuildName", setOf("buildServerBuildName"))),
+                                listOf(BuildServerCancelRequest("buildServerBuildName", "responseUrl")),
+                                listOf(TeamCityServerBuild("teamCityBuildName", "teamCityBuildId", "builds")),
                                 listOf(BuildInformation(TeamCityBuild(TeamCityBuildType("teamCityBuildName"), "teamCityBuildId", null, "none", null), "responseUrl")))),
 
                         Arguments.of(TestConfiguration(
                                 listOf(BuildConfig("teamCityBuildName1", setOf("buildServerBuildName1")), BuildConfig("teamCityBuildName2", setOf("buildServerBuildName2"))),
                                 listOf(BuildServerCancelRequest("buildServerBuildName1", "responseUrl1"), BuildServerCancelRequest("buildServerBuildName2", "responseUrl2")),
-                                listOf(TeamCityServerBuild("teamCityBuildName1", "teamCityBuildId1"), TeamCityServerBuild("teamCityBuildName2", "teamCityBuildId2")),
+                                listOf(TeamCityServerBuild("teamCityBuildName1", "teamCityBuildId1", "buildQueue"), TeamCityServerBuild("teamCityBuildName2", "teamCityBuildId2", "buildQueue")),
+                                listOf(BuildInformation(TeamCityBuild(TeamCityBuildType("teamCityBuildName1"), "teamCityBuildId1", null, "none", null), "responseUrl1"),
+                                        BuildInformation(TeamCityBuild(TeamCityBuildType("teamCityBuildName2"), "teamCityBuildId2", null, "none", null), "responseUrl2")))),
+
+                        Arguments.of(TestConfiguration(
+                                listOf(BuildConfig("teamCityBuildName1", setOf("buildServerBuildName1")), BuildConfig("teamCityBuildName2", setOf("buildServerBuildName2"))),
+                                listOf(BuildServerCancelRequest("buildServerBuildName1", "responseUrl1"), BuildServerCancelRequest("buildServerBuildName2", "responseUrl2")),
+                                listOf(TeamCityServerBuild("teamCityBuildName1", "teamCityBuildId1", "buildQueue"), TeamCityServerBuild("teamCityBuildName2", "teamCityBuildId2", "builds")),
                                 listOf(BuildInformation(TeamCityBuild(TeamCityBuildType("teamCityBuildName1"), "teamCityBuildId1", null, "none", null), "responseUrl1"),
                                         BuildInformation(TeamCityBuild(TeamCityBuildType("teamCityBuildName2"), "teamCityBuildId2", null, "none", null), "responseUrl2")))))
     }
@@ -121,8 +136,9 @@ class CancelBuildsTest {
                 }
     }
 
-    @Test
-    fun cancelBuildsWithAlternativeBuildServerName() {
+    @ParameterizedTest
+    @ValueSource(strings = ["builds", "buildQueue"])
+    fun cancelBuildsWithAlternativeBuildServerName(resourcePath: String) {
         val underTest = Application(
                 buildConfigs = listOf(BuildConfig("teamCityBuildName1", setOf("buildServerName1.1", "buildServerName1.2", "buildServerName1.3")), BuildConfig("teamCityBuildName2", setOf("buildServerName2"))),
                 jobConfigs = listOf(JobConfig("cancelBuilds", 0, Long.MAX_VALUE)),
@@ -135,7 +151,7 @@ class CancelBuildsTest {
         underTest.setBuilds { buildInformationList }
 
         givenBuildServerReturnsCancelRequests(listOf(BuildServerCancelRequest("buildServerName1.3", "${slackServer.baseUrl()}/responseUrl")))
-        givenTeamCityServerCancelsBuildsSuccessfully(listOf("teamCityBuildId1"))
+        givenTeamCityServerCancelsBuildsSuccessfully(listOf(TeamCityServerIdToResourcePath("teamCityBuildId1", resourcePath)))
         givenBuildServerDeletesCancelRequestsSuccessfully(listOf("buildServerName1.3"))
 
         underTest.run()
@@ -143,7 +159,7 @@ class CancelBuildsTest {
         await().atMost(2, SECONDS)
                 .untilAsserted {
                     verifyBuildServerGetCancelRequestsIsCalled()
-                    verifyTeamCityServerCancelRequestsIsCalledFor(listOf("teamCityBuildId1"))
+                    verifyTeamCityServerCancelRequestsIsCalledFor(listOf(TeamCityServerIdToResourcePath("teamCityBuildId1", resourcePath)))
                     verifyBuildServerDeleteCancelRequestsIsCalled(listOf("buildServerName1.3"))
 
                     assertThat(underTest.getBuilds(), contains(*buildInformationList.toTypedArray()))
@@ -165,7 +181,9 @@ class CancelBuildsTest {
         givenBuildServerReturnsCancelRequests(listOf(
                 BuildServerCancelRequest("buildServerName1", "${slackServer.baseUrl()}/responseUrl1"),
                 BuildServerCancelRequest("buildServerName1", "${slackServer.baseUrl()}/responseUrl2")))
-        givenTeamCityServerCancelsBuildsSuccessfully(listOf("teamCityBuildId1", "teamCityBuildId2"))
+        givenTeamCityServerCancelsBuildsSuccessfully(listOf(
+                TeamCityServerIdToResourcePath("teamCityBuildId1", "buildQueue"),
+                TeamCityServerIdToResourcePath("teamCityBuildId2", "builds")))
         givenBuildServerDeletesCancelRequestsSuccessfully(listOf("buildServerName1"))
 
         underTest.run()
@@ -173,7 +191,9 @@ class CancelBuildsTest {
         await().atMost(2, TimeUnit.SECONDS)
                 .untilAsserted {
                     verifyBuildServerGetCancelRequestsIsCalled()
-                    verifyTeamCityServerCancelRequestsIsCalledFor(listOf("teamCityBuildId1", "teamCityBuildId2"))
+                    verifyTeamCityServerCancelRequestsIsCalledFor(listOf(
+                            TeamCityServerIdToResourcePath("teamCityBuildId1", "buildQueue"),
+                            TeamCityServerIdToResourcePath("teamCityBuildId2", "builds")))
                     verifyBuildServerDeleteCancelRequestsIsCalled(listOf("buildServerName1"))
 
                     assertThat(underTest.getBuilds(), contains(*buildInformationList.toTypedArray()))
@@ -197,7 +217,9 @@ class CancelBuildsTest {
         givenBuildServerReturnsCancelRequests(listOf(
                 BuildServerCancelRequest("buildServerName1.1", "${slackServer.baseUrl()}/responseUrl"),
                 BuildServerCancelRequest("buildServerName1.2", "${slackServer.baseUrl()}/responseUrl")))
-        givenTeamCityServerCancelsBuildsSuccessfully(listOf("teamCityBuildId1.1", "teamCityBuildId1.2"))
+        givenTeamCityServerCancelsBuildsSuccessfully(listOf(
+                TeamCityServerIdToResourcePath("teamCityBuildId1.1", "builds"),
+                TeamCityServerIdToResourcePath("teamCityBuildId1.2", "buildQueue")))
         givenBuildServerDeletesCancelRequestsSuccessfully(listOf("buildServerName1.1", "buildServerName1.2"))
 
         underTest.run()
@@ -205,14 +227,15 @@ class CancelBuildsTest {
         await().atMost(2, SECONDS)
                 .untilAsserted {
                     verifyBuildServerGetCancelRequestsIsCalled()
-                    verifyTeamCityServerCancelRequestsIsCalledFor(listOf("teamCityBuildId1.1", "teamCityBuildId1.2"))
+                    verifyTeamCityServerCancelRequestsIsCalledFor(listOf(
+                            TeamCityServerIdToResourcePath("teamCityBuildId1.1", "builds"),
+                            TeamCityServerIdToResourcePath("teamCityBuildId1.2", "buildQueue")))
                     verifyBuildServerDeleteCancelRequestsIsCalled(listOf("buildServerName1.1", "buildServerName1.2"))
 
                     assertThat(underTest.getBuilds(), contains(*buildInformationList.toTypedArray()))
                 }
     }
 
-    // TODO Test cases where buildQueue returns 404, but build cancel returns success
     // TODO Use better display names for parameterized test rows
     @ParameterizedTest
     @MethodSource("cancelBuildsSuccessfullyTestCases")
@@ -225,7 +248,7 @@ class CancelBuildsTest {
         underTest.setBuilds { testConfig.buildInformationList }
 
         givenBuildServerReturnsCancelRequests(testConfig.buildServerCancelRequestList)
-        givenTeamCityServerCancelsBuildsSuccessfully(testConfig.teamCityServerBuildList.map { it.id })
+        givenTeamCityServerCancelsBuildsSuccessfully(testConfig.teamCityServerBuildList.map { TeamCityServerIdToResourcePath(it.id, it.resourcePath) })
         givenBuildServerDeletesCancelRequestsSuccessfully(testConfig.buildServerCancelRequestList.map { it.name })
 
         underTest.run()
@@ -233,7 +256,7 @@ class CancelBuildsTest {
         await().atMost(2, TimeUnit.SECONDS)
                 .untilAsserted {
                     verifyBuildServerGetCancelRequestsIsCalled()
-                    verifyTeamCityServerCancelRequestsIsCalledFor(testConfig.teamCityServerBuildList.map { it.id })
+                    verifyTeamCityServerCancelRequestsIsCalledFor(testConfig.teamCityServerBuildList.map { TeamCityServerIdToResourcePath(it.id, it.resourcePath) })
                     verifyBuildServerDeleteCancelRequestsIsCalled(testConfig.buildServerCancelRequestList.map { it.name })
 
                     assertThat(underTest.getBuilds(), contains(*testConfig.buildInformationList.toTypedArray()))
@@ -284,10 +307,10 @@ class CancelBuildsTest {
                     }
 
     // TODO Find xml builder
-    private fun givenTeamCityServerCancelsBuildsSuccessfully(teamCityBuildIds: List<String>) =
-            teamCityBuildIds
+    private fun givenTeamCityServerCancelsBuildsSuccessfully(teamCityServerIdToResourcePaths: List<TeamCityServerIdToResourcePath>) =
+            teamCityServerIdToResourcePaths
                     .forEach {
-                        teamCityServer.stubFor(post(urlEqualTo("/buildQueue/id:$it"))
+                        teamCityServer.stubFor(post(urlEqualTo("/${it.resourcePath}/id:${it.id}"))
                                 .withHeader("Accept", equalTo("application/xml"))
                                 .withHeader("Content-Type", equalTo("application/xml"))
                                 .withBasicAuth(teamCityUserName, teamCityPassword)
@@ -301,10 +324,10 @@ class CancelBuildsTest {
                     .withHeader("Accept", equalTo("application/json")))
 
     // TODO Find xml builder
-    private fun verifyTeamCityServerCancelRequestsIsCalledFor(teamCityBuildIds: List<String>) =
-            teamCityBuildIds
+    private fun verifyTeamCityServerCancelRequestsIsCalledFor(teamCityServerIdToResourcePaths: List<TeamCityServerIdToResourcePath>) =
+            teamCityServerIdToResourcePaths
                     .forEach {
-                        teamCityServer.verify(1, postRequestedFor(urlEqualTo("/buildQueue/id:$it"))
+                        teamCityServer.verify(1, postRequestedFor(urlEqualTo("/${it.resourcePath}/id:${it.id}"))
                                 .withHeader("Accept", equalTo("application/xml"))
                                 .withHeader("Content-Type", equalTo("application/xml"))
                                 .withBasicAuth(BasicCredentials(teamCityUserName, teamCityPassword))
