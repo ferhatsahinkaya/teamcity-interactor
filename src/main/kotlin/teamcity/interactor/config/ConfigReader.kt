@@ -3,15 +3,9 @@ package teamcity.interactor.config
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.fasterxml.jackson.module.kotlin.readValue
-import teamcity.interactor.app.BuildConfig
 import teamcity.interactor.app.JobConfig
 
 class ConfigReader {
-    // TODO make this method generic
-    fun buildConfig(configFile: String): List<BuildConfig> = ObjectMapper()
-            .registerModule(KotlinModule())
-            .readValue(this::class.java.getResource(configFile))
-
     // TODO make this method generic
     fun jobConfig(configFile: String): List<JobConfig> = ObjectMapper()
             .registerModule(KotlinModule())

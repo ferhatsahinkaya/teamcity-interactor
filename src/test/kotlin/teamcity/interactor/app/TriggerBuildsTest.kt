@@ -45,7 +45,7 @@ class TriggerBuildsTest {
         slackServer.stop()
     }
 
-    data class TestConfiguration(val buildConfigList: List<BuildConfig>,
+    data class TestConfiguration(val buildConfig: BuildConfig,
                                  val buildServerBuildList: List<BuildServerBuild>,
                                  val teamCityServerBuildList: List<TeamCityServerBuild>,
                                  val buildInformationList: List<BuildInformation>)
@@ -59,13 +59,13 @@ class TriggerBuildsTest {
         fun triggerBuildsSuccessfullyTestCases(): Stream<Arguments> =
                 Stream.of(
                         Arguments.of(TestConfiguration(
-                                listOf(BuildConfig("teamCityBuildName", setOf("buildServerBuildName"))),
+                                BuildConfig(emptyList(), listOf(Build("teamCityBuildName", setOf("buildServerBuildName")))),
                                 listOf(BuildServerBuild("buildServerBuildName", "responseUrl")),
                                 listOf(TeamCityServerBuild("teamCityBuildName", "teamCityBuildId")),
                                 listOf(BuildInformation(TeamCityBuild(TeamCityBuildType("teamCityBuildName"), "teamCityBuildId", null, "none", null), "responseUrl")))),
 
                         Arguments.of(TestConfiguration(
-                                listOf(BuildConfig("teamCityBuildName1", setOf("buildServerBuildName1")), BuildConfig("teamCityBuildName2", setOf("buildServerBuildName2"))),
+                                BuildConfig(emptyList(), listOf(Build("teamCityBuildName1", setOf("buildServerBuildName1")), Build("teamCityBuildName2", setOf("buildServerBuildName2")))),
                                 listOf(BuildServerBuild("buildServerBuildName1", "responseUrl1"), BuildServerBuild("buildServerBuildName2", "responseUrl2")),
                                 listOf(TeamCityServerBuild("teamCityBuildName1", "teamCityBuildId1"), TeamCityServerBuild("teamCityBuildName2", "teamCityBuildId2")),
                                 listOf(BuildInformation(TeamCityBuild(TeamCityBuildType("teamCityBuildName1"), "teamCityBuildId1", null, "none", null), "responseUrl1"),
@@ -75,7 +75,7 @@ class TriggerBuildsTest {
     @Test
     fun doNotTriggerAnyTeamCityBuildWhenThereIsNoSubmittedBuildRequest() {
         val underTest = Application(
-                buildConfigs = listOf(BuildConfig("teamCityBuildName-${Random.nextInt()}", setOf("buildServerBuildName-${Random.nextInt()}"))),
+                buildConfig = BuildConfig(emptyList(), listOf(Build("teamCityBuildName-${Random.nextInt()}", setOf("buildServerBuildName-${Random.nextInt()}")))),
                 jobConfigs = listOf(JobConfig("triggerBuilds", 0, Long.MAX_VALUE)),
                 buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
                 teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))
@@ -97,7 +97,7 @@ class TriggerBuildsTest {
     @Test
     fun reportBuildNotFoundWhenSubmittedBuildRequestCannotBeMappedToABuildConfiguration() {
         val underTest = Application(
-                buildConfigs = listOf(BuildConfig("teamCityBuildName-${Random.nextInt()}", setOf("buildServerBuildName-${Random.nextInt()}"))),
+                buildConfig = BuildConfig(emptyList(), listOf(Build("teamCityBuildName-${Random.nextInt()}", setOf("buildServerBuildName-${Random.nextInt()}")))),
                 jobConfigs = listOf(JobConfig("triggerBuilds", 0, Long.MAX_VALUE)),
                 buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
                 teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))
@@ -124,7 +124,7 @@ class TriggerBuildsTest {
     @MethodSource("triggerBuildsSuccessfullyTestCases")
     fun triggerBuilds(testConfig: TestConfiguration) {
         val underTest = Application(
-                buildConfigs = testConfig.buildConfigList,
+                buildConfig = testConfig.buildConfig,
                 jobConfigs = listOf(JobConfig("triggerBuilds", 0, Long.MAX_VALUE)),
                 buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
                 teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))

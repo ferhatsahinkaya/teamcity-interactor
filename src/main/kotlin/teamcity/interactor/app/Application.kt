@@ -13,12 +13,14 @@ import teamcity.interactor.config.ConfigReader
 import java.util.*
 import kotlin.concurrent.fixedRateTimer
 
-data class BuildConfig(val id: String, val names: Set<String>)
+data class BuildConfig(val groups: List<Group>, val builds: List<Build>)
+data class Group(val names: Set<String>, val buildIds: Set<String>)
+data class Build(val id: String, val names: Set<String>)
 data class JobConfig(val name: String, val initialDelay: Long, val period: Long)
 data class BuildServerConfig(val baseUrl: String)
 data class TeamCityServerConfig(val baseUrl: String, val username: String, val password: String)
 
-class Application internal constructor(private val buildConfigs: List<BuildConfig> = ConfigReader().buildConfig("build-config.json"),
+class Application internal constructor(private val buildConfig: BuildConfig = ConfigReader().config("build-config.json", BuildConfig::class.java),
                                        private val jobConfigs: List<JobConfig> = ConfigReader().jobConfig("job-config.json"),
                                        buildServerConfig: BuildServerConfig = ConfigReader().config("build-server-config.json", BuildServerConfig::class.java),
                                        teamCityServerConfig: TeamCityServerConfig = ConfigReader().config("teamcity-server-config.json", TeamCityServerConfig::class.java)) {
@@ -35,7 +37,7 @@ class Application internal constructor(private val buildConfigs: List<BuildConfi
                 builds.plus(
                         buildServerClient.getBuildRequests()
                                 .mapNotNull { buildRequest ->
-                                    val buildInformation = buildConfigs.firstOrNull { buildConfig -> buildConfig.names.any { teamCityBuildName -> teamCityBuildName.equals(buildRequest.id, true) } }
+                                    val buildInformation = buildConfig.builds.firstOrNull { build -> build.names.any { teamCityBuildName -> teamCityBuildName.equals(buildRequest.id, true) } }
                                             ?.let { teamCityClient.build(TeamCityBuildRequest(TeamCityBuildType(it.id))) }
                                             ?.let { TeamCityBuild(it.buildType, it.id, it.number, "none", it.status) }
                                             ?.let { BuildInformation(it, buildRequest.responseUrl) }
@@ -76,7 +78,7 @@ class Application internal constructor(private val buildConfigs: List<BuildConfi
 
         job("cancelBuilds") {
             buildServerClient.getCancelRequests()
-                    .groupBy { cancelRequest -> buildConfigs.firstOrNull { buildConfig -> buildConfig.names.any { name -> name.equals(cancelRequest.id, true) } }?.id }
+                    .groupBy { cancelRequest -> buildConfig.builds.firstOrNull { build -> build.names.any { name -> name.equals(cancelRequest.id, true) } }?.id }
                     .forEach { entry ->
                         entry.key
                                 ?.let { builds.filter { buildInformation -> it == buildInformation.teamCityBuild.buildType.id }.map { it.teamCityBuild.id } }

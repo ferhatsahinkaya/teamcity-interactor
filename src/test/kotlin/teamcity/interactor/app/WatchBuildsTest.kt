@@ -48,7 +48,7 @@ class WatchBuildsTest {
     @Test
     fun doNotCheckStatusWhenThereIsNoBuildInformationToWatch() {
         val underTest = Application(
-                buildConfigs = listOf(BuildConfig("teamCityBuildName-${Random.nextInt()}", setOf("buildServerBuildName-${Random.nextInt()}"))),
+                buildConfig = BuildConfig(emptyList(), listOf(Build("teamCityBuildName-${Random.nextInt()}", setOf("buildServerBuildName-${Random.nextInt()}")))),
                 jobConfigs = listOf(JobConfig("watchBuilds", 0, Long.MAX_VALUE)),
                 buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
                 teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))
@@ -73,15 +73,15 @@ class WatchBuildsTest {
             "queued, running, running, running, https://cdn3.iconfinder.com/data/icons/living/24/254_running_activity_fitness-512.png, Running")
     fun watchActiveBuilds(initialState: String, finalState: String, finalStatus: String, displayName: String, imageUrl: String, altText: String) {
         val underTest = Application(
-                buildConfigs = emptyList(),
+                buildConfig = BuildConfig(emptyList(), emptyList()),
                 jobConfigs = listOf(JobConfig("watchBuilds", 0, Long.MAX_VALUE)),
                 buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
                 teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))
-        underTest.setBuilds { listOf(BuildInformation(TeamCityBuild(TeamCityBuildType("teamCityBuildName"), "teamCityBuildId", null, initialState, null), "${slackServer.baseUrl()}/responseUrl")) }
+        underTest.setBuilds { listOf(BuildInformation(TeamCityBuild(TeamCityBuildType("teamCityBuildName", "TeamCityDisplayName"), "teamCityBuildId", null, initialState, null), "${slackServer.baseUrl()}/responseUrl")) }
         val buildNumber = "number-${Random.nextInt()}"
-        val reportingMessage = ReportingMessage("*teamCityBuildName* build *$buildNumber* is $displayName", imageUrl, altText)
+        val reportingMessage = ReportingMessage("*TeamCityBuildDisplayName* build *$buildNumber* is $displayName", imageUrl, altText)
 
-        givenTeamCityServerReturnsStatusSuccessfully(TeamCityBuild(TeamCityBuildType("teamCityBuildName"), "teamCityBuildId", buildNumber, finalState, finalStatus))
+        givenTeamCityServerReturnsStatusSuccessfully(TeamCityBuild(TeamCityBuildType("teamCityBuildName", "TeamCityBuildDisplayName"), "teamCityBuildId", buildNumber, finalState, finalStatus))
         givenSlackServerAcceptsReportingMessages("/responseUrl", listOf(reportingMessage))
 
         underTest.run()
@@ -91,7 +91,7 @@ class WatchBuildsTest {
                     buildServer.verify(0, allRequests())
                     verifyTeamCityServerGetStatusesIsCalledFor("teamCityBuildId")
                     verifySlackServerReportMessagesIsCalled("/responseUrl", listOf(reportingMessage))
-                    assertThat(underTest.getBuilds(), contains(BuildInformation(TeamCityBuild(TeamCityBuildType("teamCityBuildName"), "teamCityBuildId", buildNumber, finalState, finalStatus), "${slackServer.baseUrl()}/responseUrl")))
+                    assertThat(underTest.getBuilds(), contains(BuildInformation(TeamCityBuild(TeamCityBuildType("teamCityBuildName", "TeamCityBuildDisplayName"), "teamCityBuildId", buildNumber, finalState, finalStatus), "${slackServer.baseUrl()}/responseUrl")))
                 }
     }
 
@@ -109,15 +109,15 @@ class WatchBuildsTest {
             "running, finished, UNKNOWN, cancelled, https://cdn3.iconfinder.com/data/icons/cleaning-icons/512/Dumpster-512.png, Failure")
     fun watchFinishedBuilds(initialState: String, finalState: String, finalStatus: String, displayName: String, imageUrl: String, altText: String) {
         val underTest = Application(
-                buildConfigs = emptyList(),
+                buildConfig = BuildConfig(emptyList(), emptyList()),
                 jobConfigs = listOf(JobConfig("watchBuilds", 0, Long.MAX_VALUE)),
                 buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
                 teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))
-        underTest.setBuilds { listOf(BuildInformation(TeamCityBuild(TeamCityBuildType("teamCityBuildName"), "teamCityBuildId", null, initialState, null), "${slackServer.baseUrl()}/responseUrl")) }
+        underTest.setBuilds { listOf(BuildInformation(TeamCityBuild(TeamCityBuildType("teamCityBuildName", "TeamCityBuildDisplayName"), "teamCityBuildId", null, initialState, null), "${slackServer.baseUrl()}/responseUrl")) }
         val buildNumber = "number-${Random.nextInt()}"
-        val reportingMessage = ReportingMessage("*teamCityBuildName* build *$buildNumber* is $displayName", imageUrl, altText)
+        val reportingMessage = ReportingMessage("*TeamCityBuildDisplayName* build *$buildNumber* is $displayName", imageUrl, altText)
 
-        givenTeamCityServerReturnsStatusSuccessfully(TeamCityBuild(TeamCityBuildType("teamCityBuildName"), "teamCityBuildId", buildNumber, finalState, finalStatus))
+        givenTeamCityServerReturnsStatusSuccessfully(TeamCityBuild(TeamCityBuildType("teamCityBuildName", "TeamCityBuildDisplayName"), "teamCityBuildId", buildNumber, finalState, finalStatus))
         givenSlackServerAcceptsReportingMessages("/responseUrl", listOf(reportingMessage))
 
         underTest.run()
@@ -159,7 +159,7 @@ class WatchBuildsTest {
                     .withBasicAuth(teamCityUserName, teamCityPassword)
                     .willReturn(aResponse()
                             .withStatus(200)
-                            .withBody("<build><buildType id=\"${teamCityBuild.buildType.id}\"></buildType><id>teamCityBuildId</id><state>${teamCityBuild.state}</state><number>${teamCityBuild.number}</number><status>${teamCityBuild.status}</status></build>")))
+                            .withBody("<build><buildType id=\"${teamCityBuild.buildType.id}\" name=\"${teamCityBuild.buildType.name}\"></buildType><id>teamCityBuildId</id><state>${teamCityBuild.state}</state><number>${teamCityBuild.number}</number><status>${teamCityBuild.status}</status></build>")))
 
     private fun verifyTeamCityServerGetStatusesIsCalledFor(teamCityBuildId: String) =
             teamCityServer.verify(1, getRequestedFor(urlEqualTo("/buildQueue/id:$teamCityBuildId"))
