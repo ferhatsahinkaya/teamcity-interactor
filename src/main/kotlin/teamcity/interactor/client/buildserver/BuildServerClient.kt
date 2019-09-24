@@ -29,7 +29,7 @@ interface BuildServerClient {
 
     @RequestLine("DELETE /build")
     @Headers("Content-Type: application/json")
-    fun deleteBuildRequest(buildName: BuildName)
+    fun deleteBuildRequest(name: Name)
 
     @RequestLine("GET /cancel")
     @Headers("Accept: application/json")
@@ -37,7 +37,15 @@ interface BuildServerClient {
 
     @RequestLine("DELETE /cancel")
     @Headers("Content-Type: application/json")
-    fun deleteCancelRequest(buildName: BuildName)
+    fun deleteCancelRequest(name: Name)
+
+    @RequestLine("GET /state")
+    @Headers("Accept: application/json")
+    fun getStateRequests(): List<StateRequest>
+
+    @RequestLine("DELETE /state")
+    @Headers("Content-Type: application/json")
+    fun deleteStateRequest(name: Name)
 }
 
 @JacksonXmlRootElement
@@ -47,4 +55,7 @@ data class CancelRequest(val id: String, val responseUrl: String)
 data class BuildRequest(val id: String, val responseUrl: String)
 
 @JacksonXmlRootElement
-data class BuildName(val id: String)
+data class StateRequest(val id: String, val responseUrl: String)
+
+@JacksonXmlRootElement
+data class Name(val id: String)

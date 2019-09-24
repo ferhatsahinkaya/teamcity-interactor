@@ -35,6 +35,11 @@ interface TeamCityClient {
     @Headers("Accept: application/xml",
             "Content-Type: application/xml")
     fun status(@Param("id") id: String): TeamCityBuild
+
+    @RequestLine("GET /builds/buildType:{id}")
+    @Headers("Accept: application/xml",
+            "Content-Type: application/xml")
+    fun state(@Param("id") buildTypeId: String): TeamCityBuild
 }
 
 @JacksonXmlRootElement(localName = "build")

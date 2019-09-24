@@ -1,10 +1,10 @@
 package teamcity.interactor.app
 
 import feign.FeignException
-import teamcity.interactor.client.buildserver.BuildName
+import teamcity.interactor.client.buildserver.Name
 import teamcity.interactor.client.buildserver.getBuildServerClient
 import teamcity.interactor.client.reporting.*
-import teamcity.interactor.client.reporting.BuildStatus.NotFound
+import teamcity.interactor.client.reporting.BuildStatus.*
 import teamcity.interactor.client.teamcity.TeamCityBuild
 import teamcity.interactor.client.teamcity.TeamCityBuildRequest
 import teamcity.interactor.client.teamcity.TeamCityBuildType
@@ -50,7 +50,7 @@ class Application internal constructor(private val buildConfig: BuildConfig = Co
                                             }
 
                                     println(buildRequest.responseUrl)
-                                    buildServerClient.deleteBuildRequest(BuildName(buildRequest.id))
+                                    buildServerClient.deleteBuildRequest(Name(buildRequest.id))
                                     buildInformation
                                 })
             }
@@ -101,8 +101,33 @@ class Application internal constructor(private val buildConfig: BuildConfig = Co
                         entry.value
                                 .map { it.id }
                                 .distinct()
-                                .map { BuildName(it) }
+                                .map { Name(it) }
                                 .forEach { buildServerClient.deleteCancelRequest(it) }
+                    }
+        }
+
+        job("watchState") {
+            buildServerClient.getStateRequests()
+                    .forEach { stateRequest ->
+                        val failedBuilds = buildConfig.groups
+                                .first { group -> group.names.any { name -> name.equals(stateRequest.id, true) } }
+                                .buildIds
+                                .map { teamCityClient.state(it) }
+                                .filter { Success != BuildStatus.of(it.state, it.status) }
+
+                        if (failedBuilds.isNotEmpty()) {
+                            reportingClient(stateRequest.responseUrl).report(Report(
+                                    listOf(ReportingMessage(
+                                            text = Text(text = failedBuilds.joinToString(prefix = "Following *${stateRequest.id}* builds are currently failing:\n", separator = "\n") { "*${it.buildType.name}*" }),
+                                            buildStatus = Failure))))
+
+                        } else {
+                            reportingClient(stateRequest.responseUrl).report(Report(
+                                    listOf(ReportingMessage(
+                                            text = Text(text = "All *${stateRequest.id}* builds are successful!"),
+                                            buildStatus = Success))))
+                        }
+                        buildServerClient.deleteStateRequest(Name(stateRequest.id))
                     }
         }
     }
