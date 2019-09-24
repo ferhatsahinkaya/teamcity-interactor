@@ -67,26 +67,28 @@ class WatchStateTest {
         @JvmStatic
         fun allSuccessfulBuildsTestCases(): Stream<Arguments> =
                 Stream.of(
-                        Arguments.of("groupId1", emptySet<String>()),
-                        Arguments.of("groupId2", setOf("buildId1")),
-                        Arguments.of("groupId3", setOf("buildId1", "buildId2")),
-                        Arguments.of("groupId4", setOf("buildId1", "buildId2", "buildId3", "buildId4")))
+                        Arguments.of("groupId1", emptySet<String>(), emptySet<String>()),
+                        Arguments.of("groupId2", setOf("buildId1"), emptySet<String>()),
+                        Arguments.of("groupId3", setOf("buildId1"), setOf("buildId2")),
+                        Arguments.of("groupId4", setOf("buildId1", "buildId2"), setOf("buildId3", "buildId4", "buildId5")),
+                        Arguments.of("groupId5", setOf("buildId1", "buildId2", "buildId3", "buildId4"), setOf("buildId5")))
 
         @JvmStatic
         fun someFailedBuildsTestCases(): Stream<Arguments> =
                 Stream.of(
-                        Arguments.of("groupId1", emptySet<String>(), setOf("buildId1")),
-                        Arguments.of("groupId2", setOf("buildId1"), setOf("buildId2")),
-                        Arguments.of("groupId3", setOf("buildId1", "buildId2"), setOf("buildId3")),
-                        Arguments.of("groupId4", setOf("buildId1", "buildId2", "buildId3", "buildId4"), setOf("buildId5")),
-                        Arguments.of("groupId5", emptySet<String>(), setOf("buildId1", "buildId2", "buildId3", "buildId4")))
+                        Arguments.of("groupId1", emptySet<String>(), setOf("buildId1"), setOf("buildId2", "buildId3")),
+                        Arguments.of("groupId2", setOf("buildId1"), setOf("buildId2"), emptySet<String>()),
+                        Arguments.of("groupId3", setOf("buildId1", "buildId2"), setOf("buildId3"), setOf("buildId4")),
+                        Arguments.of("groupId4", setOf("buildId1", "buildId2"), setOf("buildId3"), setOf("buildId4", "buildId5", "buildId6")),
+                        Arguments.of("groupId5", setOf("buildId1", "buildId2", "buildId3", "buildId4"), setOf("buildId5"), setOf("buildId6")),
+                        Arguments.of("groupId6", emptySet<String>(), setOf("buildId1", "buildId2", "buildId3", "buildId4"), emptySet<String>()))
     }
 
     @ParameterizedTest
     @MethodSource("allSuccessfulBuildsTestCases")
-    fun watchStateWhenAllBuildsSuccessful(groupId: String, buildIds: Set<String>) {
+    fun watchStateWhenAllBuildsSuccessful(groupId: String, buildIds: Set<String>, nonExistingBuildIds: Set<String>) {
         val underTest = Application(
-                buildConfig = BuildConfig(listOf(Group(setOf(groupId), buildIds)), emptyList()),
+                buildConfig = BuildConfig(listOf(Group(setOf(groupId), buildIds.plus(nonExistingBuildIds))), emptyList()),
                 jobConfigs = listOf(JobConfig("watchState", 0, Long.MAX_VALUE)),
                 buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
                 teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))
@@ -94,6 +96,7 @@ class WatchStateTest {
 
         givenBuildServerReturnsStateRequests(listOf(StateRequest(groupId, "${slackServer.baseUrl()}/responseUrl")))
         givenTeamCityServerReturnsStateSuccessfully(buildIds, "SUCCESS")
+        givenTeamCityServerReturnsStateNotExisting(nonExistingBuildIds)
         givenSlackServerAcceptsReportingMessages("/responseUrl", listOf(reportingMessage))
         givenBuildServerDeletesStateRequestsSuccessfully(groupId)
 
@@ -102,7 +105,7 @@ class WatchStateTest {
         await().atMost(2, SECONDS)
                 .untilAsserted {
                     verifyBuildServerStateRequestsIsCalled()
-                    verifyTeamCityServerGetStateIsCalledFor(buildIds)
+                    verifyTeamCityServerGetStateIsCalledFor(buildIds.plus(nonExistingBuildIds))
                     verifySlackServerReportMessagesIsCalled("/responseUrl", listOf(reportingMessage))
                     verifyBuildServerDeleteStateRequestsIsCalled(groupId)
 
@@ -112,9 +115,9 @@ class WatchStateTest {
 
     @ParameterizedTest
     @MethodSource("someFailedBuildsTestCases")
-    fun watchStateWhenSomeBuildsFailed(groupId: String, successfulBuildIds: Set<String>, failedBuildsIds: Set<String>) {
+    fun watchStateWhenSomeBuildsFailed(groupId: String, successfulBuildIds: Set<String>, failedBuildsIds: Set<String>, nonExistingBuildIds: Set<String>) {
         val underTest = Application(
-                buildConfig = BuildConfig(listOf(Group(setOf(groupId), successfulBuildIds.plus(failedBuildsIds))), emptyList()),
+                buildConfig = BuildConfig(listOf(Group(setOf(groupId), successfulBuildIds.plus(failedBuildsIds).plus(nonExistingBuildIds))), emptyList()),
                 jobConfigs = listOf(JobConfig("watchState", 0, Long.MAX_VALUE)),
                 buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
                 teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))
@@ -123,6 +126,7 @@ class WatchStateTest {
         givenBuildServerReturnsStateRequests(listOf(StateRequest(groupId, "${slackServer.baseUrl()}/responseUrl")))
         givenTeamCityServerReturnsStateSuccessfully(successfulBuildIds, "SUCCESS")
         givenTeamCityServerReturnsStateSuccessfully(failedBuildsIds, "FAILURE")
+        givenTeamCityServerReturnsStateNotExisting(nonExistingBuildIds)
         givenSlackServerAcceptsReportingMessages("/responseUrl", listOf(reportingMessage))
         givenBuildServerDeletesStateRequestsSuccessfully(groupId)
 
@@ -131,7 +135,7 @@ class WatchStateTest {
         await().atMost(2, SECONDS)
                 .untilAsserted {
                     verifyBuildServerStateRequestsIsCalled()
-                    verifyTeamCityServerGetStateIsCalledFor(successfulBuildIds.plus(failedBuildsIds))
+                    verifyTeamCityServerGetStateIsCalledFor(successfulBuildIds.plus(failedBuildsIds).plus(nonExistingBuildIds))
                     verifySlackServerReportMessagesIsCalled("/responseUrl", listOf(reportingMessage))
                     verifyBuildServerDeleteStateRequestsIsCalled(groupId)
 
@@ -182,6 +186,15 @@ class WatchStateTest {
                         .willReturn(aResponse()
                                 .withStatus(200)
                                 .withBody("<build><buildType id=\"${"buildId-" + Random.nextInt()}\" name=\"$it\"></buildType><id>teamCityBuildId</id><state>finished</state><number>${Random.nextInt()}</number><status>$status</status></build>")))
+            }
+
+    private fun givenTeamCityServerReturnsStateNotExisting(buildIds: Set<String>) =
+            buildIds.forEach {
+                teamCityServer.stubFor(get(urlEqualTo("/builds/buildType:$it"))
+                        .withHeader("Accept", equalTo("application/xml"))
+                        .withHeader("Content-Type", equalTo("application/xml"))
+                        .withBasicAuth(teamCityUserName, teamCityPassword)
+                        .willReturn(aResponse().withStatus(404)))
             }
 
     private fun givenBuildServerDeletesStateRequestsSuccessfully(groupId: String) =

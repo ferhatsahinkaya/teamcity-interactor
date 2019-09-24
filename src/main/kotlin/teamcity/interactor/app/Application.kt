@@ -112,13 +112,19 @@ class Application internal constructor(private val buildConfig: BuildConfig = Co
                         val failedBuilds = buildConfig.groups
                                 .first { group -> group.names.any { name -> name.equals(stateRequest.id, true) } }
                                 .buildIds
-                                .map { teamCityClient.state(it) }
-                                .filter { Success != BuildStatus.of(it.state, it.status) }
+                                .mapNotNull { buildId ->
+                                    try {
+                                        val state = teamCityClient.state(buildId)
+                                        if (Success != BuildStatus.of(state.state, state.status)) state.buildType.name else null
+                                    } catch (e: FeignException) {
+                                        if (e.status() == 404) null else throw e
+                                    }
+                                }
 
                         if (failedBuilds.isNotEmpty()) {
                             reportingClient(stateRequest.responseUrl).report(Report(
                                     listOf(ReportingMessage(
-                                            text = Text(text = failedBuilds.joinToString(prefix = "Following *${stateRequest.id}* builds are currently failing:\n", separator = "\n") { "*${it.buildType.name}*" }),
+                                            text = Text(text = failedBuilds.joinToString(prefix = "Following *${stateRequest.id}* builds are currently failing:\n", separator = "\n") { "*$it*" }),
                                             buildStatus = Failure))))
 
                         } else {
