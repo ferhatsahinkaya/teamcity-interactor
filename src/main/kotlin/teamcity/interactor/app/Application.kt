@@ -134,7 +134,7 @@ class Application internal constructor(private val buildConfig: BuildConfig = Co
         job("watchState") {
             buildServerClient.getStateRequests()
                     .forEach { stateRequest ->
-                        val group = buildConfig.groups.firstOrNull { it.names.contains(stateRequest.id) }
+                        val group = buildConfig.groups.firstOrNull { group -> group.names.any { id -> id.equals(stateRequest.id, true) } }
                         if (group == null) {
                             reportingClient(stateRequest.responseUrl).report(Report(
                                     listOf(ReportingMessage(
