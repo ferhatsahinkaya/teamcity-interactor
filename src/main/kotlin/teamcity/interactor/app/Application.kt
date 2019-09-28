@@ -14,7 +14,8 @@ import java.util.*
 import kotlin.concurrent.fixedRateTimer
 
 data class BuildConfig(val groups: List<Group>, val builds: List<Build>)
-data class Group(val names: Set<String>, val buildIds: Set<String>)
+data class Group(val names: Set<String>, val projects: List<Project>)
+data class Project(val id: String, val excludedBuildIds: Set<String> = emptySet())
 data class Build(val id: String, val names: Set<String>)
 data class JobConfig(val name: String, val initialDelay: Long, val period: Long)
 data class BuildServerConfig(val baseUrl: String)
@@ -106,32 +107,54 @@ class Application internal constructor(private val buildConfig: BuildConfig = Co
                     }
         }
 
+        fun failedBuilds(projects: List<Project>): Set<String> {
+            return projects
+                    .flatMap { project ->
+                        val teamCityProject = teamCityClient.project(project.id)
+                        teamCityProject
+                                .buildTypes
+                                .filterNot { project.excludedBuildIds.contains(it.id) }
+                                .map { it.id }
+                                .mapNotNull {
+                                    try {
+                                        val state = teamCityClient.state(it)
+                                        if (Success != BuildStatus.of(state.state, state.status)) state.buildType.name else null
+                                    } catch (e: FeignException) {
+                                        if (e.status() == 404) {
+                                            println("Build $it not found. Ignoring the build failure")
+                                            null
+                                        } else throw e
+                                    }
+                                }.plus(failedBuilds(teamCityProject.projects?.map { Project(it.id, project.excludedBuildIds) }
+                                        ?: emptyList()))
+                    }
+                    .toSet()
+        }
+
         job("watchState") {
             buildServerClient.getStateRequests()
                     .forEach { stateRequest ->
-                        val failedBuilds = buildConfig.groups
-                                .first { group -> group.names.any { name -> name.equals(stateRequest.id, true) } }
-                                .buildIds
-                                .mapNotNull { buildId ->
-                                    try {
-                                        val state = teamCityClient.state(buildId)
-                                        if (Success != BuildStatus.of(state.state, state.status)) state.buildType.name else null
-                                    } catch (e: FeignException) {
-                                        if (e.status() == 404) null else throw e
-                                    }
-                                }
-
-                        if (failedBuilds.isNotEmpty()) {
+                        val group = buildConfig.groups.firstOrNull { it.names.contains(stateRequest.id) }
+                        if (group == null) {
                             reportingClient(stateRequest.responseUrl).report(Report(
                                     listOf(ReportingMessage(
-                                            text = Text(text = failedBuilds.joinToString(prefix = "Following *${stateRequest.id}* builds are currently failing:\n", separator = "\n") { "*$it*" }),
-                                            buildStatus = Failure))))
-
+                                            text = Text(text = "${stateRequest.id} group is not found"),
+                                            buildStatus = NotFound))))
                         } else {
-                            reportingClient(stateRequest.responseUrl).report(Report(
-                                    listOf(ReportingMessage(
-                                            text = Text(text = "All *${stateRequest.id}* builds are successful!"),
-                                            buildStatus = Success))))
+                            val failedBuilds = failedBuilds(group.projects)
+
+                            if (failedBuilds.isNotEmpty()) {
+                                reportingClient(stateRequest.responseUrl).report(Report(
+                                        listOf(ReportingMessage(
+                                                text = Text(text = failedBuilds.joinToString(prefix = "Following *${stateRequest.id}* builds are currently failing:\n", separator = "\n") { "*$it*" }),
+                                                buildStatus = Failure))))
+
+                            } else {
+                                reportingClient(stateRequest.responseUrl).report(Report(
+                                        listOf(ReportingMessage(
+                                                text = Text(text = "All *${stateRequest.id}* builds are successful!"),
+                                                buildStatus = Success))))
+                            }
                         }
                         buildServerClient.deleteStateRequest(Name(stateRequest.id))
                     }

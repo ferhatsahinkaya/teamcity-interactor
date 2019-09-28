@@ -8,8 +8,6 @@ import com.github.tomakehurst.wiremock.matching.RequestPatternBuilder.allRequest
 import net.minidev.json.JSONArray
 import net.minidev.json.JSONObject.toJSONString
 import org.awaitility.Awaitility.await
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.empty
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -19,6 +17,13 @@ import org.junit.jupiter.params.provider.MethodSource
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.stream.Stream
 import kotlin.random.Random
+
+// TODO Test multiple top level project under same group
+// TODO Test find group id case insensitive
+// TODO Test add test for no group configuration
+// TODO Test multiple state requests exist
+// TODO Test with excluded build ids
+// TODO Test with included build ids
 
 class WatchStateTest {
     private val teamCityUserName = "username-${Random.nextInt()}"
@@ -44,14 +49,20 @@ class WatchStateTest {
     data class StateRequest(val groupId: String, val responseUrl: String)
     data class ReportingMessage(val text: String, val imageUrl: String, val altText: String)
 
+    data class Group(val names: Set<String>, val projects: List<TopLevelProject>)
+    data class TopLevelProject(val project: Project, val excludedBuildIds: Set<String> = emptySet())
+    data class Project(val id: String, val subProjects: List<Project>, val builds: List<Build>)
+    data class Build(val id: String, val status: String)
+
     @Test
     fun doNotCheckStatusWhenThereIsNoStateRequestsToWatch() {
         val underTest = Application(
-                buildConfig = BuildConfig(listOf(Group(setOf("Provisioning"), setOf("teamCityBuildName-${Random.nextInt()}"))), listOf(Build("teamCityBuildName-${Random.nextInt()}", setOf("buildServerBuildName-${Random.nextInt()}")))),
+                buildConfig = BuildConfig(listOf(Group(setOf("Provisioning"), listOf(Project("projectId-${Random.nextInt()}")))), listOf(Build("teamCityBuildName-${Random.nextInt()}", setOf("buildServerBuildName-${Random.nextInt()}")))),
                 jobConfigs = listOf(JobConfig("watchState", 0, Long.MAX_VALUE)),
                 buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
                 teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))
-        givenBuildServerReturnsStateRequests(listOf())
+
+        givenBuildServerReturnsStateRequests(emptyList())
 
         underTest.run()
 
@@ -63,40 +74,43 @@ class WatchStateTest {
                 }
     }
 
-    companion object {
-        @JvmStatic
-        fun allSuccessfulBuildsTestCases(): Stream<Arguments> =
-                Stream.of(
-                        Arguments.of("groupId1", emptySet<String>(), emptySet<String>()),
-                        Arguments.of("groupId2", setOf("buildId1"), emptySet<String>()),
-                        Arguments.of("groupId3", setOf("buildId1"), setOf("buildId2")),
-                        Arguments.of("groupId4", setOf("buildId1", "buildId2"), setOf("buildId3", "buildId4", "buildId5")),
-                        Arguments.of("groupId5", setOf("buildId1", "buildId2", "buildId3", "buildId4"), setOf("buildId5")))
+    @Test
+    fun reportGroupNotFoundWhenSubmittedStateRequestCannotBeMappedToAGroupConfiguration() {
+        val underTest = Application(
+                buildConfig = BuildConfig(listOf(Group(setOf("Provisioning"), listOf(Project("projectId-${Random.nextInt()}")))), listOf(Build("teamCityBuildName-${Random.nextInt()}", setOf("buildServerBuildName-${Random.nextInt()}")))),
+                jobConfigs = listOf(JobConfig("watchState", 0, Long.MAX_VALUE)),
+                buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
+                teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))
+        val reportingMessage = ReportingMessage("NotExistingGroupId group is not found", "https://cdn3.iconfinder.com/data/icons/network-and-communications-8/32/network_Error_lost_no_page_not_found-512.png", "Not Found")
 
-        @JvmStatic
-        fun someFailedBuildsTestCases(): Stream<Arguments> =
-                Stream.of(
-                        Arguments.of("groupId1", emptySet<String>(), setOf("buildId1"), setOf("buildId2", "buildId3")),
-                        Arguments.of("groupId2", setOf("buildId1"), setOf("buildId2"), emptySet<String>()),
-                        Arguments.of("groupId3", setOf("buildId1", "buildId2"), setOf("buildId3"), setOf("buildId4")),
-                        Arguments.of("groupId4", setOf("buildId1", "buildId2"), setOf("buildId3"), setOf("buildId4", "buildId5", "buildId6")),
-                        Arguments.of("groupId5", setOf("buildId1", "buildId2", "buildId3", "buildId4"), setOf("buildId5"), setOf("buildId6")),
-                        Arguments.of("groupId6", emptySet<String>(), setOf("buildId1", "buildId2", "buildId3", "buildId4"), emptySet<String>()))
+        givenBuildServerReturnsStateRequests(listOf(StateRequest("NotExistingGroupId", "${slackServer.baseUrl()}/responseUrl")))
+        givenSlackServerAcceptsReportingMessages("/responseUrl", listOf(reportingMessage))
+        givenBuildServerDeletesStateRequestsSuccessfully("NotExistingGroupId")
+
+        underTest.run()
+
+        await().atMost(2, SECONDS)
+                .untilAsserted {
+                    verifyBuildServerStateRequestsIsCalled()
+                    verifySlackServerReportMessagesIsCalled("/responseUrl", listOf(reportingMessage))
+                    verifyBuildServerDeleteStateRequestsIsCalled("NotExistingGroupId")
+                }
     }
 
     @ParameterizedTest
     @MethodSource("allSuccessfulBuildsTestCases")
-    fun watchStateWhenAllBuildsSuccessful(groupId: String, buildIds: Set<String>, nonExistingBuildIds: Set<String>) {
+    fun watchStateWhenAllBuildsSuccessful(groupId: String, groups: List<Group>) {
         val underTest = Application(
-                buildConfig = BuildConfig(listOf(Group(setOf(groupId), buildIds.plus(nonExistingBuildIds))), emptyList()),
+                buildConfig = BuildConfig(groups.map { group -> teamcity.interactor.app.Group(group.names, group.projects.map { teamcity.interactor.app.Project(it.project.id, it.excludedBuildIds) }) }, emptyList()),
                 jobConfigs = listOf(JobConfig("watchState", 0, Long.MAX_VALUE)),
                 buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
                 teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))
         val reportingMessage = ReportingMessage("All *${groupId}* builds are successful!", "https://cdn0.iconfinder.com/data/icons/social-messaging-ui-color-shapes/128/check-circle-green-512.png", "Success")
+        val groupProjects = groups.firstOrNull { it.names.contains(groupId) }?.projects ?: emptyList()
+        val projectToExcludedBuildIds = groupProjects.map { it.project to it.excludedBuildIds }
 
         givenBuildServerReturnsStateRequests(listOf(StateRequest(groupId, "${slackServer.baseUrl()}/responseUrl")))
-        givenTeamCityServerReturnsStateSuccessfully(buildIds, "SUCCESS")
-        givenTeamCityServerReturnsStateNotExisting(nonExistingBuildIds)
+        givenTeamCityServerReturnsStateSuccessfully(projectToExcludedBuildIds)
         givenSlackServerAcceptsReportingMessages("/responseUrl", listOf(reportingMessage))
         givenBuildServerDeletesStateRequestsSuccessfully(groupId)
 
@@ -105,28 +119,27 @@ class WatchStateTest {
         await().atMost(2, SECONDS)
                 .untilAsserted {
                     verifyBuildServerStateRequestsIsCalled()
-                    verifyTeamCityServerGetStateIsCalledFor(buildIds.plus(nonExistingBuildIds))
+                    verifyTeamCityServerGetStateIsCalledFor(projectToExcludedBuildIds)
+                    verifyTeamCityServerGetStateIsNotCalledFor(groupProjects.flatMap { it.excludedBuildIds })
                     verifySlackServerReportMessagesIsCalled("/responseUrl", listOf(reportingMessage))
                     verifyBuildServerDeleteStateRequestsIsCalled(groupId)
-
-                    assertThat(underTest.getBuilds(), empty())
                 }
     }
 
     @ParameterizedTest
     @MethodSource("someFailedBuildsTestCases")
-    fun watchStateWhenSomeBuildsFailed(groupId: String, successfulBuildIds: Set<String>, failedBuildsIds: Set<String>, nonExistingBuildIds: Set<String>) {
+    fun watchStateWhenSomeBuildsFailed(groupId: String, groups: List<Group>, failedBuildsIds: List<String>) {
         val underTest = Application(
-                buildConfig = BuildConfig(listOf(Group(setOf(groupId), successfulBuildIds.plus(failedBuildsIds).plus(nonExistingBuildIds))), emptyList()),
+                buildConfig = BuildConfig(groups.map { group -> teamcity.interactor.app.Group(group.names, group.projects.map { teamcity.interactor.app.Project(it.project.id, it.excludedBuildIds) }) }, emptyList()),
                 jobConfigs = listOf(JobConfig("watchState", 0, Long.MAX_VALUE)),
                 buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
                 teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))
         val reportingMessage = ReportingMessage(failedBuildsIds.joinToString(prefix = "Following *$groupId* builds are currently failing:\n", separator = "\n") { "*$it*" }, "https://cdn0.iconfinder.com/data/icons/social-messaging-ui-color-shapes/128/close-circle-red-512.png", "Failure")
+        val groupProjects = groups.firstOrNull { it.names.contains(groupId) }?.projects ?: emptyList()
+        val projectToExcludedBuildIds = groupProjects.map { it.project to it.excludedBuildIds }
 
         givenBuildServerReturnsStateRequests(listOf(StateRequest(groupId, "${slackServer.baseUrl()}/responseUrl")))
-        givenTeamCityServerReturnsStateSuccessfully(successfulBuildIds, "SUCCESS")
-        givenTeamCityServerReturnsStateSuccessfully(failedBuildsIds, "FAILURE")
-        givenTeamCityServerReturnsStateNotExisting(nonExistingBuildIds)
+        givenTeamCityServerReturnsStateSuccessfully(projectToExcludedBuildIds)
         givenSlackServerAcceptsReportingMessages("/responseUrl", listOf(reportingMessage))
         givenBuildServerDeletesStateRequestsSuccessfully(groupId)
 
@@ -135,11 +148,10 @@ class WatchStateTest {
         await().atMost(2, SECONDS)
                 .untilAsserted {
                     verifyBuildServerStateRequestsIsCalled()
-                    verifyTeamCityServerGetStateIsCalledFor(successfulBuildIds.plus(failedBuildsIds).plus(nonExistingBuildIds))
+                    verifyTeamCityServerGetStateIsCalledFor(projectToExcludedBuildIds)
+                    verifyTeamCityServerGetStateIsNotCalledFor(groupProjects.flatMap { it.excludedBuildIds })
                     verifySlackServerReportMessagesIsCalled("/responseUrl", listOf(reportingMessage))
                     verifyBuildServerDeleteStateRequestsIsCalled(groupId)
-
-                    assertThat(underTest.getBuilds(), empty())
                 }
     }
 
@@ -177,16 +189,53 @@ class WatchStateTest {
                                             })))))
 
     // TODO Find xml builder
-    private fun givenTeamCityServerReturnsStateSuccessfully(buildIds: Set<String>, status: String) =
-            buildIds.forEach {
-                teamCityServer.stubFor(get(urlEqualTo("/builds/buildType:$it"))
-                        .withHeader("Accept", equalTo("application/xml"))
-                        .withHeader("Content-Type", equalTo("application/xml"))
-                        .withBasicAuth(teamCityUserName, teamCityPassword)
-                        .willReturn(aResponse()
-                                .withStatus(200)
-                                .withBody("<build><buildType id=\"${"buildId-" + Random.nextInt()}\" name=\"$it\"></buildType><id>teamCityBuildId</id><state>finished</state><number>${Random.nextInt()}</number><status>$status</status></build>")))
-            }
+    private fun givenTeamCityServerReturnsStateSuccessfully(projectsToExcludedBuildIds: List<Pair<Project, Set<String>>>) {
+        projectsToExcludedBuildIds.forEach { projectToExcludedBuildId ->
+            val project = projectToExcludedBuildId.first
+            val excludedBuildIds = projectToExcludedBuildId.second
+
+            teamCityServer.stubFor(get(urlEqualTo("/projects/id:${project.id}"))
+                    .withHeader("Accept", equalTo("application/xml"))
+                    .withHeader("Content-Type", equalTo("application/xml"))
+                    .withBasicAuth(teamCityUserName, teamCityPassword)
+                    .willReturn(aResponse()
+                            .withStatus(200)
+                            .withBody(
+                                    "<project>" +
+                                            project.builds.joinToString(prefix = "<buildTypes>", postfix = "</buildTypes>") { "<buildType id=\"${it.id}\"/>" } +
+                                            project.subProjects.joinToString(prefix = "<projects>", postfix = "</projects>") { "<project id=\"${it.id}\"/>" } +
+                                            "</project>")))
+
+            project.builds
+                    .filterNot { excludedBuildIds.contains(it.id) }
+                    .forEach { build ->
+                        if (build.status == "NOT_FOUND") {
+                            teamCityServer.stubFor(get(urlEqualTo("/builds/buildType:${build.id}"))
+                                    .withHeader("Accept", equalTo("application/xml"))
+                                    .withHeader("Content-Type", equalTo("application/xml"))
+                                    .withBasicAuth(teamCityUserName, teamCityPassword)
+                                    .willReturn(aResponse().withStatus(404)))
+                        } else {
+                            teamCityServer.stubFor(get(urlEqualTo("/builds/buildType:${build.id}"))
+                                    .withHeader("Accept", equalTo("application/xml"))
+                                    .withHeader("Content-Type", equalTo("application/xml"))
+                                    .withBasicAuth(teamCityUserName, teamCityPassword)
+                                    .willReturn(aResponse()
+                                            .withStatus(200)
+                                            .withBody("<build><buildType id=\"${"buildId-" + Random.nextInt()}\" name=\"${build.id}\"></buildType><id>teamCityBuildId</id><state>finished</state><number>${Random.nextInt()}</number><status>${build.status}</status></build>")))
+                        }
+                    }
+
+            givenTeamCityServerReturnsStateSuccessfully(project.subProjects.map { it to excludedBuildIds })
+        }
+    }
+
+    private fun givenBuildServerDeletesStateRequestsSuccessfully(groupId: String) =
+            buildServer.stubFor(delete(urlEqualTo("/state"))
+                    .withHeader("Content-Type", equalTo("application/json"))
+                    .withRequestBody(equalToJson(toJSONString(mapOf("id" to groupId))))
+                    .willReturn(aResponse()
+                            .withStatus(200)))
 
     private fun givenTeamCityServerReturnsStateNotExisting(buildIds: Set<String>) =
             buildIds.forEach {
@@ -197,24 +246,40 @@ class WatchStateTest {
                         .willReturn(aResponse().withStatus(404)))
             }
 
-    private fun givenBuildServerDeletesStateRequestsSuccessfully(groupId: String) =
-            buildServer.stubFor(delete(urlEqualTo("/state"))
-                    .withHeader("Content-Type", equalTo("application/json"))
-                    .withRequestBody(equalToJson(toJSONString(mapOf("id" to groupId))))
-                    .willReturn(aResponse()
-                            .withStatus(200)))
-
     private fun verifyBuildServerStateRequestsIsCalled() =
             buildServer.verify(getRequestedFor(urlEqualTo("/state"))
                     .withHeader("Accept", equalTo("application/json")))
 
-    private fun verifyTeamCityServerGetStateIsCalledFor(buildIds: Set<String>) =
-            buildIds.forEach {
-                teamCityServer.verify(1, getRequestedFor(urlEqualTo("/builds/buildType:$it"))
+    private fun verifyTeamCityServerGetStateIsNotCalledFor(buildIds: List<String>) =
+            repeat(buildIds.size) {
+                teamCityServer.verify(0, getRequestedFor(urlEqualTo("/builds/buildType:$it"))
                         .withHeader("Accept", equalTo("application/xml"))
                         .withHeader("Content-Type", equalTo("application/xml"))
                         .withBasicAuth(BasicCredentials(teamCityUserName, teamCityPassword)))
             }
+
+    private fun verifyTeamCityServerGetStateIsCalledFor(projectsToExcludedBuildIds: List<Pair<Project, Set<String>>>) {
+        projectsToExcludedBuildIds.forEach { projectsToExcludedBuildId ->
+            val project = projectsToExcludedBuildId.first
+            val excludedBuildIds = projectsToExcludedBuildId.second
+
+            teamCityServer.verify(1, getRequestedFor(urlEqualTo("/projects/id:${project.id}"))
+                    .withHeader("Accept", equalTo("application/xml"))
+                    .withHeader("Content-Type", equalTo("application/xml"))
+                    .withBasicAuth(BasicCredentials(teamCityUserName, teamCityPassword)))
+
+            project.builds
+                    .filterNot { excludedBuildIds.contains(it.id) }
+                    .forEach { build ->
+                        teamCityServer.verify(1, getRequestedFor(urlEqualTo("/builds/buildType:${build.id}"))
+                                .withHeader("Accept", equalTo("application/xml"))
+                                .withHeader("Content-Type", equalTo("application/xml"))
+                                .withBasicAuth(BasicCredentials(teamCityUserName, teamCityPassword)))
+                    }
+
+            verifyTeamCityServerGetStateIsCalledFor(project.subProjects.map { it to excludedBuildIds })
+        }
+    }
 
     private fun verifySlackServerReportMessagesIsCalled(responseUrl: String, reportingMessages: List<ReportingMessage>) =
             slackServer.verify(1, postRequestedFor(urlEqualTo(responseUrl))
@@ -238,4 +303,37 @@ class WatchStateTest {
             buildServer.verify(1, deleteRequestedFor(urlEqualTo("/state"))
                     .withHeader("Content-Type", equalTo("application/json"))
                     .withRequestBody(equalToJson(toJSONString(mapOf("id" to groupId)))))
+
+    companion object {
+        @JvmStatic
+        fun allSuccessfulBuildsTestCases(): Stream<Arguments> =
+                Stream.of(
+                        Arguments.of("groupId1", listOf(Group(setOf("groupId1"), listOf()))),
+                        Arguments.of("groupId2", listOf(Group(setOf("groupId2"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "SUCCESS"))), emptySet()))))),
+                        Arguments.of("groupId3", listOf(Group(setOf("groupId3"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "SUCCESS"), Build("buildId2", "SUCCESS"))), emptySet()))))),
+                        Arguments.of("groupId4", listOf(Group(setOf("groupId4"), listOf(TopLevelProject(Project("projectId1", listOf(Project("subProjectId1.1", emptyList(), listOf(Build("buildId1.1", "SUCCESS"), Build("buildId1.2", "SUCCESS")))), listOf(Build("buildId1", "SUCCESS"), Build("buildId2", "SUCCESS"), Build("buildId3", "SUCCESS"))), emptySet()))))),
+                        Arguments.of("groupId5", listOf(Group(setOf("groupId5"), listOf(TopLevelProject(Project("projectId1", listOf(Project("projectId2", listOf(Project("projectId3", emptyList(), listOf(Build("buildId3", "SUCCESS")))), listOf(Build("buildId2", "SUCCESS")))), listOf(Build("buildId1", "SUCCESS")))))))),
+                        Arguments.of("groupId6", listOf(Group(setOf("groupId2"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "SUCCESS")))))), Group(setOf("groupId6"), listOf(TopLevelProject(Project("projectId1", listOf(Project("projectId2", listOf(Project("projectId3", emptyList(), listOf(Build("buildId3", "SUCCESS")))), listOf(Build("buildId2", "SUCCESS")))), listOf(Build("buildId1", "SUCCESS")))))))),
+                        Arguments.of("groupId7", listOf(Group(setOf("groupId7"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "SUCCESS")))))), Group(setOf("groupId6"), listOf(TopLevelProject(Project("projectId1", listOf(Project("projectId2", listOf(Project("projectId3", emptyList(), listOf(Build("buildId3", "SUCCESS")))), listOf(Build("buildId2", "SUCCESS")))), listOf(Build("buildId1", "SUCCESS")))))))),
+                        Arguments.of("groupId8", listOf(Group(setOf("groupId8"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "SUCCESS"), Build("buildId2", "FAILURE"))), setOf("buildId2")))))),
+                        Arguments.of("groupId9", listOf(Group(setOf("groupId2"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "SUCCESS")))))), Group(setOf("groupId9"), listOf(TopLevelProject(Project("projectId1", listOf(Project("projectId2", listOf(Project("projectId3", emptyList(), listOf(Build("buildId3", "SUCCESS"), Build("buildId4", "FAILURE")))), listOf(Build("buildId2", "SUCCESS"), Build("buildId6", "FAILURE")))), listOf(Build("buildId1", "SUCCESS"))), setOf("buildId4", "buildId6")))))),
+                        Arguments.of("groupId10", listOf(Group(setOf("groupId10"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "SUCCESS"), Build("buildId2", "NOT_FOUND")))))))),
+                        Arguments.of("groupId11", listOf(Group(setOf("groupId11"), listOf(TopLevelProject(Project("projectId1", listOf(Project("projectId2", listOf(Project("projectId3", emptyList(), listOf(Build("buildId3", "NOT_FOUND")))), listOf(Build("buildId2", "NOT_FOUND")))), listOf(Build("buildId1", "NOT_FOUND")))))))),
+                        Arguments.of("groupId12", listOf(Group(setOf("groupId2"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "SUCCESS")))))), Group(setOf("groupId12"), listOf(TopLevelProject(Project("projectId1", listOf(Project("projectId2", listOf(Project("projectId3", emptyList(), listOf(Build("buildId3", "SUCCESS"), Build("buildId4", "FAILURE")))), listOf(Build("buildId2", "SUCCESS"), Build("buildId6", "NOT_FOUND")))), listOf(Build("buildId1", "SUCCESS"))), setOf("buildId4")))))))
+
+        @JvmStatic
+        fun someFailedBuildsTestCases(): Stream<Arguments> =
+                Stream.of(
+                        Arguments.of("groupId1", listOf(Group(setOf("groupId1"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "FAILURE"))))))), listOf("buildId1")),
+                        Arguments.of("groupId2", listOf(Group(setOf("groupId2"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "SUCCESS"), Build("buildId2", "FAILURE"))))))), listOf("buildId2")),
+                        Arguments.of("groupId3", listOf(Group(setOf("groupId3"), listOf(TopLevelProject(Project("projectId1", listOf(Project("subProjectId1.1", emptyList(), listOf(Build("buildId1.1", "SUCCESS"), Build("buildId1.2", "FAILURE")))), listOf(Build("buildId1", "SUCCESS"), Build("buildId2", "SUCCESS"), Build("buildId3", "SUCCESS"))))))), listOf("buildId1.2")),
+                        Arguments.of("groupId4", listOf(Group(setOf("groupId4"), listOf(TopLevelProject(Project("projectId1", listOf(Project("projectId2", listOf(Project("projectId3", emptyList(), listOf(Build("buildId3", "SUCCESS")))), listOf(Build("buildId2", "SUCCESS")))), listOf(Build("buildId1", "FAILURE"))))))), listOf("buildId1")),
+                        Arguments.of("groupId5", listOf(Group(setOf("groupId2"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "FAILURE")))))), Group(setOf("groupId5"), listOf(TopLevelProject(Project("projectId1", listOf(Project("projectId2", listOf(Project("projectId3", emptyList(), listOf(Build("buildId3", "FAILURE")))), listOf(Build("buildId2", "SUCCESS")))), listOf(Build("buildId7", "FAILURE"))))))), listOf("buildId7", "buildId3")),
+                        Arguments.of("groupId6", listOf(Group(setOf("groupId7"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "SUCCESS")))))), Group(setOf("groupId6"), listOf(TopLevelProject(Project("projectId1", listOf(Project("projectId2", listOf(Project("projectId3", emptyList(), listOf(Build("buildId3", "FAILURE")))), listOf(Build("buildId2", "FAILURE")))), listOf(Build("buildId1", "SUCCESS"))))))), listOf("buildId2", "buildId3")),
+                        Arguments.of("groupId7", listOf(Group(setOf("groupId7"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "FAILURE"), Build("buildId2", "FAILURE"), Build("buildId3", "FAILURE"), Build("buildId4", "FAILURE"))), setOf("buildId1"))))), listOf("buildId2", "buildId3", "buildId4")),
+                        Arguments.of("groupId8", listOf(Group(setOf("groupId7"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "SUCCESS")))))), Group(setOf("groupId8"), listOf(TopLevelProject(Project("projectId1", listOf(Project("projectId2", listOf(Project("projectId3", emptyList(), listOf(Build("buildId3", "FAILURE")))), listOf(Build("buildId2", "FAILURE")))), listOf(Build("buildId1", "SUCCESS"))), setOf("buildId3"))))), listOf("buildId2")),
+                        Arguments.of("groupId9", listOf(Group(setOf("groupId8"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "FAILURE"))), setOf("buildId1")))), Group(setOf("groupId9"), listOf(TopLevelProject(Project("projectId1", listOf(Project("projectId2", listOf(Project("projectId3", emptyList(), listOf(Build("buildId3", "FAILURE")))), listOf(Build("buildId2", "FAILURE")))), listOf(Build("buildId1", "FAILURE"))), setOf("buildId3"))))), listOf("buildId1", "buildId2")),
+                        Arguments.of("groupId10", listOf(Group(setOf("groupId8"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "FAILURE"))), setOf("buildId1")))), Group(setOf("groupId10"), listOf(TopLevelProject(Project("projectId1", listOf(Project("projectId2", listOf(Project("projectId3", emptyList(), listOf(Build("buildId3", "FAILURE")))), listOf(Build("buildId2", "NOT_FOUND")))), listOf(Build("buildId1", "FAILURE"))), setOf("buildId3"))))), listOf("buildId1")),
+                        Arguments.of("groupId11", listOf(Group(setOf("groupId11"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "NOT_FOUND"), Build("buildId2", "FAILURE"), Build("buildId3", "NOT_FOUND"), Build("buildId4", "FAILURE"))), setOf("buildId1"))))), listOf("buildId2", "buildId4")))
+    }
 }

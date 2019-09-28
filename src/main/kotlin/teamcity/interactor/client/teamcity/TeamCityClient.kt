@@ -40,7 +40,15 @@ interface TeamCityClient {
     @Headers("Accept: application/xml",
             "Content-Type: application/xml")
     fun state(@Param("id") buildTypeId: String): TeamCityBuild
+
+    @RequestLine("GET /projects/id:{id}")
+    @Headers("Accept: application/xml",
+            "Content-Type: application/xml")
+    fun project(@Param("id") projectId: String): TeamCityProject
 }
+
+@JacksonXmlRootElement(localName = "project")
+data class TeamCityProject(val buildTypes: List<TeamCityBuildType>, val projects: List<ProjectType>?) // TODO Can we use empty set instead of null
 
 @JacksonXmlRootElement(localName = "build")
 data class TeamCityBuild(val buildType: TeamCityBuildType, val id: String, val number: String?, val state: String, val status: String?)
@@ -50,6 +58,9 @@ data class TeamCityBuildRequest(val buildType: TeamCityBuildType)
 
 @JacksonXmlRootElement(localName = "buildType")
 data class TeamCityBuildType(@JacksonXmlProperty(isAttribute = true) val id: String, @JacksonXmlProperty(isAttribute = true) val name: String? = null)
+
+@JacksonXmlRootElement(localName = "project")
+data class ProjectType(@JacksonXmlProperty(isAttribute = true) val id: String)
 
 @JacksonXmlRootElement(localName = "buildCancelRequest")
 data class TeamCityCancelRequest(val comment: String = "Build cancelled by the user", val readIntoQueue: Boolean = true)
