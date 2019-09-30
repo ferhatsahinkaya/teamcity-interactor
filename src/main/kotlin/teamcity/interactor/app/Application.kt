@@ -15,7 +15,8 @@ import kotlin.concurrent.fixedRateTimer
 
 data class BuildConfig(val groups: List<Group>, val builds: List<Build>)
 data class Group(val names: Set<String>, val projects: List<Project>)
-data class Project(val id: String, val excludedBuildIds: Set<String> = emptySet())
+data class Project(val id: String, val exclusion: Exclusion = Exclusion())
+data class Exclusion(val projectIds: Set<String> = emptySet(), val buildIds: Set<String> = emptySet())
 data class Build(val id: String, val names: Set<String>)
 data class JobConfig(val name: String, val initialDelay: Long, val period: Long)
 data class BuildServerConfig(val baseUrl: String)
@@ -113,7 +114,7 @@ class Application internal constructor(private val buildConfig: BuildConfig = Co
                         val teamCityProject = teamCityClient.project(project.id)
                         teamCityProject
                                 .buildTypes
-                                .filterNot { project.excludedBuildIds.contains(it.id) }
+                                .filterNot { project.exclusion.buildIds.contains(it.id) }
                                 .map { it.id }
                                 .mapNotNull {
                                     try {
@@ -125,7 +126,7 @@ class Application internal constructor(private val buildConfig: BuildConfig = Co
                                             null
                                         } else throw e
                                     }
-                                }.plus(failedBuilds(teamCityProject.projects?.map { Project(it.id, project.excludedBuildIds) }
+                                }.plus(failedBuilds(teamCityProject.projects?.map { Project(it.id, project.exclusion) }
                                         ?: emptyList()))
                     }
                     .toSet()
