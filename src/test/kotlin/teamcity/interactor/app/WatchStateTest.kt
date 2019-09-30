@@ -19,11 +19,10 @@ import java.util.stream.Stream
 import kotlin.random.Random
 
 // TODO Test multiple top level project under same group
-// TODO Test find group id case insensitive
 // TODO Test add test for no group configuration
 // TODO Test multiple state requests exist
-// TODO Test with excluded build ids
 // TODO Test with included build ids
+// TODO Test with excluded project ids
 
 class WatchStateTest {
     private val teamCityUserName = "username-${Random.nextInt()}"
@@ -313,36 +312,602 @@ class WatchStateTest {
         @JvmStatic
         fun allSuccessfulBuildsTestCases(): Stream<Arguments> =
                 Stream.of(
-                        Arguments.of("groupId1", listOf(Group(setOf("groupId1"), listOf()))),
-                        Arguments.of("groupId2", listOf(Group(setOf("groupId2"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "SUCCESS")))))))),
-                        Arguments.of("groupId3", listOf(Group(setOf("groupId3"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "SUCCESS"), Build("buildId2", "SUCCESS")))))))),
-                        Arguments.of("groupId4", listOf(Group(setOf("groupId4"), listOf(TopLevelProject(Project("projectId1", listOf(Project("subProjectId1.1", emptyList(), listOf(Build("buildId1.1", "SUCCESS"), Build("buildId1.2", "SUCCESS")))), listOf(Build("buildId1", "SUCCESS"), Build("buildId2", "SUCCESS"), Build("buildId3", "SUCCESS")))))))),
-                        Arguments.of("groupId5", listOf(Group(setOf("groupId5"), listOf(TopLevelProject(Project("projectId1", listOf(Project("projectId2", listOf(Project("projectId3", emptyList(), listOf(Build("buildId3", "SUCCESS")))), listOf(Build("buildId2", "SUCCESS")))), listOf(Build("buildId1", "SUCCESS")))))))),
-                        Arguments.of("groupId6", listOf(Group(setOf("groupId2"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "SUCCESS")))))), Group(setOf("groupId6"), listOf(TopLevelProject(Project("projectId1", listOf(Project("projectId2", listOf(Project("projectId3", emptyList(), listOf(Build("buildId3", "SUCCESS")))), listOf(Build("buildId2", "SUCCESS")))), listOf(Build("buildId1", "SUCCESS")))))))),
-                        Arguments.of("groupId7", listOf(Group(setOf("groupId7"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "SUCCESS")))))), Group(setOf("groupId6"), listOf(TopLevelProject(Project("projectId1", listOf(Project("projectId2", listOf(Project("projectId3", emptyList(), listOf(Build("buildId3", "SUCCESS")))), listOf(Build("buildId2", "SUCCESS")))), listOf(Build("buildId1", "SUCCESS")))))))),
-                        Arguments.of("groupId8", listOf(Group(setOf("groupId8"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "SUCCESS"), Build("buildId2", "FAILURE"))), Exclusion(buildIds = setOf("buildId2"))))))),
-                        Arguments.of("groupId9", listOf(Group(setOf("groupId2"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "SUCCESS")))))), Group(setOf("groupId9"), listOf(TopLevelProject(Project("projectId1", listOf(Project("projectId2", listOf(Project("projectId3", emptyList(), listOf(Build("buildId3", "SUCCESS"), Build("buildId4", "FAILURE")))), listOf(Build("buildId2", "SUCCESS"), Build("buildId6", "FAILURE")))), listOf(Build("buildId1", "SUCCESS"))), Exclusion(buildIds = setOf("buildId4", "buildId6"))))))),
-                        Arguments.of("groupId10", listOf(Group(setOf("groupId10"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "SUCCESS"), Build("buildId2", "NOT_FOUND")))))))),
-                        Arguments.of("groupId11", listOf(Group(setOf("groupId11"), listOf(TopLevelProject(Project("projectId1", listOf(Project("projectId2", listOf(Project("projectId3", emptyList(), listOf(Build("buildId3", "NOT_FOUND")))), listOf(Build("buildId2", "NOT_FOUND")))), listOf(Build("buildId1", "NOT_FOUND")))))))),
-                        Arguments.of("groupId12", listOf(Group(setOf("groupId2"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "SUCCESS")))))), Group(setOf("groupId12"), listOf(TopLevelProject(Project("projectId1", listOf(Project("projectId2", listOf(Project("projectId3", emptyList(), listOf(Build("buildId3", "SUCCESS"), Build("buildId4", "FAILURE")))), listOf(Build("buildId2", "SUCCESS"), Build("buildId6", "NOT_FOUND")))), listOf(Build("buildId1", "SUCCESS"))), Exclusion(buildIds = setOf("buildId4"))))))),
-                        Arguments.of("GrOupId13", listOf(Group(setOf("groupId13"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "SUCCESS")))))))),
-                        Arguments.of("GROUPID14", listOf(Group(setOf("GroUpId14"), listOf(TopLevelProject(Project("projectId1", listOf(Project("subProjectId1.1", emptyList(), listOf(Build("buildId1.1", "SUCCESS"), Build("buildId1.2", "SUCCESS")))), listOf(Build("buildId1", "SUCCESS"), Build("buildId2", "SUCCESS"), Build("buildId3", "SUCCESS")))))))))
+                        Arguments.of(
+                                "groupId1",
+                                listOf(Group(setOf("groupId1"), emptyList()))),
+
+                        Arguments.of(
+                                "groupId2",
+                                listOf(Group(
+                                        setOf("groupId2"),
+                                        listOf(TopLevelProject(
+                                                Project("projectId1", emptyList(), listOf(Build("buildId1", "SUCCESS")))))))),
+
+                        Arguments.of(
+                                "groupId3",
+                                listOf(Group(
+                                        setOf("groupId3"),
+                                        listOf(TopLevelProject(
+                                                Project(
+                                                        "projectId1",
+                                                        emptyList(),
+                                                        listOf(
+                                                                Build("buildId1", "SUCCESS"),
+                                                                Build("buildId2", "SUCCESS")))))))),
+
+                        Arguments.of(
+                                "groupId4",
+                                listOf(Group(
+                                        setOf("groupId4"),
+                                        listOf(TopLevelProject(
+                                                Project(
+                                                        "projectId1",
+                                                        listOf(Project(
+                                                                "subProjectId1.1",
+                                                                emptyList(),
+                                                                listOf(
+                                                                        Build("buildId1.1", "SUCCESS"),
+                                                                        Build("buildId1.2", "SUCCESS")))),
+                                                        listOf(
+                                                                Build("buildId1", "SUCCESS"),
+                                                                Build("buildId2", "SUCCESS"),
+                                                                Build("buildId3", "SUCCESS")))))))),
+
+                        Arguments.of(
+                                "groupId5",
+                                listOf(Group(
+                                        setOf("groupId5"),
+                                        listOf(TopLevelProject(
+                                                Project(
+                                                        "projectId1",
+                                                        listOf(Project(
+                                                                "projectId2",
+                                                                listOf(Project(
+                                                                        "projectId3",
+                                                                        emptyList(),
+                                                                        listOf(Build("buildId3", "SUCCESS")))),
+                                                                listOf(Build("buildId2", "SUCCESS")))),
+                                                        listOf(Build("buildId1", "SUCCESS")))))))),
+
+                        Arguments.of(
+                                "groupId6",
+                                listOf(Group(
+                                        setOf("groupId2"),
+                                        listOf(TopLevelProject(
+                                                Project(
+                                                        "projectId1",
+                                                        emptyList(),
+                                                        listOf(Build("buildId1", "SUCCESS")))))),
+                                        Group(
+                                                setOf("groupId6"),
+                                                listOf(TopLevelProject(
+                                                        Project(
+                                                                "projectId1",
+                                                                listOf(Project("projectId2",
+                                                                        listOf(Project(
+                                                                                "projectId3",
+                                                                                emptyList(),
+                                                                                listOf(Build("buildId3", "SUCCESS")))),
+                                                                        listOf(Build("buildId2", "SUCCESS")))),
+                                                                listOf(Build("buildId1", "SUCCESS")))))))),
+
+                        Arguments.of(
+                                "groupId7",
+                                listOf(Group(
+                                        setOf("groupId7"),
+                                        listOf(TopLevelProject(
+                                                Project(
+                                                        "projectId1",
+                                                        emptyList(),
+                                                        listOf(Build("buildId1", "SUCCESS")))))),
+                                        Group(
+                                                setOf("groupId6"),
+                                                listOf(TopLevelProject(
+                                                        Project(
+                                                                "projectId1",
+                                                                listOf(
+                                                                        Project(
+                                                                                "projectId2",
+                                                                                listOf(
+                                                                                        Project(
+                                                                                                "projectId3",
+                                                                                                emptyList(),
+                                                                                                listOf(Build("buildId3", "SUCCESS")))),
+                                                                                listOf(Build("buildId2", "SUCCESS")))),
+                                                                listOf(Build("buildId1", "SUCCESS")))))))),
+
+                        Arguments.of(
+                                "groupId8",
+                                listOf(Group(
+                                        setOf("groupId8"),
+                                        listOf(TopLevelProject(
+                                                Project(
+                                                        "projectId1",
+                                                        emptyList(),
+                                                        listOf(
+                                                                Build("buildId1", "SUCCESS"),
+                                                                Build("buildId2", "FAILURE"))),
+                                                Exclusion(buildIds = setOf("buildId2"))))))),
+
+                        Arguments.of(
+                                "groupId9",
+                                listOf(Group(
+                                        setOf("groupId2"),
+                                        listOf(TopLevelProject(
+                                                Project(
+                                                        "projectId1",
+                                                        emptyList(),
+                                                        listOf(Build("buildId1", "SUCCESS")))))),
+                                        Group(
+                                                setOf("groupId9"),
+                                                listOf(TopLevelProject(
+                                                        Project(
+                                                                "projectId1",
+                                                                listOf(
+                                                                        Project(
+                                                                                "projectId2",
+                                                                                listOf(
+                                                                                        Project(
+                                                                                                "projectId3",
+                                                                                                emptyList(),
+                                                                                                listOf(
+                                                                                                        Build("buildId3", "SUCCESS"),
+                                                                                                        Build("buildId4", "FAILURE")))),
+                                                                                listOf(
+                                                                                        Build("buildId2", "SUCCESS"),
+                                                                                        Build("buildId6", "FAILURE")))),
+                                                                listOf(Build("buildId1", "SUCCESS"))),
+                                                        Exclusion(buildIds = setOf("buildId4", "buildId6"))))))),
+
+                        Arguments.of(
+                                "groupId10",
+                                listOf(Group(
+                                        setOf("groupId10"),
+                                        listOf(TopLevelProject(
+                                                Project(
+                                                        "projectId1",
+                                                        emptyList(),
+                                                        listOf(
+                                                                Build("buildId1", "SUCCESS"),
+                                                                Build("buildId2", "NOT_FOUND")))))))),
+
+                        Arguments.of(
+                                "groupId11",
+                                listOf(Group(
+                                        setOf("groupId11"),
+                                        listOf(TopLevelProject(
+                                                Project(
+                                                        "projectId1",
+                                                        listOf(Project(
+                                                                "projectId2",
+                                                                listOf(Project(
+                                                                        "projectId3",
+                                                                        emptyList(),
+                                                                        listOf(Build("buildId3", "NOT_FOUND")))),
+                                                                listOf(Build("buildId2", "NOT_FOUND")))),
+                                                        listOf(Build("buildId1", "NOT_FOUND")))))))),
+
+                        Arguments.of(
+                                "groupId12",
+                                listOf(Group(
+                                        setOf("groupId2"),
+                                        listOf(TopLevelProject(
+                                                Project(
+                                                        "projectId1",
+                                                        emptyList(),
+                                                        listOf(Build("buildId1", "SUCCESS")))))),
+                                        Group(
+                                                setOf("groupId12"),
+                                                listOf(TopLevelProject(
+                                                        Project(
+                                                                "projectId1",
+                                                                listOf(Project(
+                                                                        "projectId2",
+                                                                        listOf(Project(
+                                                                                "projectId3",
+                                                                                emptyList(),
+                                                                                listOf(
+                                                                                        Build("buildId3", "SUCCESS"),
+                                                                                        Build("buildId4", "FAILURE")))),
+                                                                        listOf(
+                                                                                Build("buildId2", "SUCCESS"),
+                                                                                Build("buildId6", "NOT_FOUND")))),
+                                                                listOf(Build("buildId1", "SUCCESS"))),
+                                                        Exclusion(buildIds = setOf("buildId4"))))))),
+
+                        Arguments.of(
+                                "GrOupId13",
+                                listOf(Group(
+                                        setOf("groupId13"),
+                                        listOf(TopLevelProject(
+                                                Project(
+                                                        "projectId1",
+                                                        emptyList(),
+                                                        listOf(Build("buildId1", "SUCCESS")))))))),
+
+                        Arguments.of(
+                                "GROUPID14",
+                                listOf(Group(
+                                        setOf("GroUpId14"),
+                                        listOf(TopLevelProject(
+                                                Project(
+                                                        "projectId1",
+                                                        listOf(Project(
+                                                                "subProjectId1.1",
+                                                                emptyList(),
+                                                                listOf(
+                                                                        Build("buildId1.1", "SUCCESS"),
+                                                                        Build("buildId1.2", "SUCCESS")))),
+                                                        listOf(
+                                                                Build("buildId1", "SUCCESS"),
+                                                                Build("buildId2", "SUCCESS"),
+                                                                Build("buildId3", "SUCCESS")))))))),
+
+                        Arguments.of(
+                                "groupId15",
+                                listOf(Group(
+                                        setOf("groupId15"),
+                                        listOf(TopLevelProject(
+                                                Project(
+                                                        "projectId1",
+                                                        listOf(Project(
+                                                                "subProjectId1.1",
+                                                                emptyList(),
+                                                                listOf(
+                                                                        Build("buildId1.1", "SUCCESS"),
+                                                                        Build("buildId1.2", "SUCCESS")))),
+                                                        listOf(
+                                                                Build("buildId11", "SUCCESS"),
+                                                                Build("buildId12", "SUCCESS"),
+                                                                Build("buildId13", "SUCCESS")))),
+                                                TopLevelProject(
+                                                        Project(
+                                                                "projectId2",
+                                                                listOf(Project(
+                                                                        "subProjectId2.1",
+                                                                        emptyList(),
+                                                                        listOf(
+                                                                                Build("buildId2.1", "SUCCESS"),
+                                                                                Build("buildId2.2", "SUCCESS")))),
+                                                                listOf(
+                                                                        Build("buildId21", "SUCCESS"),
+                                                                        Build("buildId22", "SUCCESS"),
+                                                                        Build("buildId23", "SUCCESS")))))))),
+
+                        Arguments.of(
+                                "groupId16",
+                                listOf(
+                                        Group(
+                                                setOf("groupId16"),
+                                                listOf(
+                                                        TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId11", "SUCCESS")))),
+                                                        TopLevelProject(Project("projectId2", emptyList(), listOf(Build("buildId21", "SUCCESS")))))),
+                                        Group(
+                                                setOf("groupId17"),
+                                                listOf(
+                                                        TopLevelProject(Project("projectId3", emptyList(), listOf(Build("buildId11", "SUCCESS")))))))))
 
         @JvmStatic
         fun someFailedBuildsTestCases(): Stream<Arguments> =
                 Stream.of(
-                        Arguments.of("groupId1", listOf(Group(setOf("groupId1"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "FAILURE"))))))), listOf("buildId1")),
-                        Arguments.of("groupId2", listOf(Group(setOf("groupId2"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "SUCCESS"), Build("buildId2", "FAILURE"))))))), listOf("buildId2")),
-                        Arguments.of("groupId3", listOf(Group(setOf("groupId3"), listOf(TopLevelProject(Project("projectId1", listOf(Project("subProjectId1.1", emptyList(), listOf(Build("buildId1.1", "SUCCESS"), Build("buildId1.2", "FAILURE")))), listOf(Build("buildId1", "SUCCESS"), Build("buildId2", "SUCCESS"), Build("buildId3", "SUCCESS"))))))), listOf("buildId1.2")),
-                        Arguments.of("groupId4", listOf(Group(setOf("groupId4"), listOf(TopLevelProject(Project("projectId1", listOf(Project("projectId2", listOf(Project("projectId3", emptyList(), listOf(Build("buildId3", "SUCCESS")))), listOf(Build("buildId2", "SUCCESS")))), listOf(Build("buildId1", "FAILURE"))))))), listOf("buildId1")),
-                        Arguments.of("groupId5", listOf(Group(setOf("groupId2"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "FAILURE")))))), Group(setOf("groupId5"), listOf(TopLevelProject(Project("projectId1", listOf(Project("projectId2", listOf(Project("projectId3", emptyList(), listOf(Build("buildId3", "FAILURE")))), listOf(Build("buildId2", "SUCCESS")))), listOf(Build("buildId7", "FAILURE"))))))), listOf("buildId7", "buildId3")),
-                        Arguments.of("groupId6", listOf(Group(setOf("groupId7"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "SUCCESS")))))), Group(setOf("groupId6"), listOf(TopLevelProject(Project("projectId1", listOf(Project("projectId2", listOf(Project("projectId3", emptyList(), listOf(Build("buildId3", "FAILURE")))), listOf(Build("buildId2", "FAILURE")))), listOf(Build("buildId1", "SUCCESS"))))))), listOf("buildId2", "buildId3")),
-                        Arguments.of("groupId7", listOf(Group(setOf("groupId7"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "FAILURE"), Build("buildId2", "FAILURE"), Build("buildId3", "FAILURE"), Build("buildId4", "FAILURE"))), Exclusion(buildIds = setOf("buildId1")))))), listOf("buildId2", "buildId3", "buildId4")),
-                        Arguments.of("groupId8", listOf(Group(setOf("groupId7"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "SUCCESS")))))), Group(setOf("groupId8"), listOf(TopLevelProject(Project("projectId1", listOf(Project("projectId2", listOf(Project("projectId3", emptyList(), listOf(Build("buildId3", "FAILURE")))), listOf(Build("buildId2", "FAILURE")))), listOf(Build("buildId1", "SUCCESS"))), Exclusion(buildIds = setOf("buildId3")))))), listOf("buildId2")),
-                        Arguments.of("groupId9", listOf(Group(setOf("groupId8"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "FAILURE"))), Exclusion(buildIds = setOf("buildId1"))))), Group(setOf("groupId9"), listOf(TopLevelProject(Project("projectId1", listOf(Project("projectId2", listOf(Project("projectId3", emptyList(), listOf(Build("buildId3", "FAILURE")))), listOf(Build("buildId2", "FAILURE")))), listOf(Build("buildId1", "FAILURE"))), Exclusion(buildIds = setOf("buildId3")))))), listOf("buildId1", "buildId2")),
-                        Arguments.of("groupId10", listOf(Group(setOf("groupId8"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "FAILURE"))), Exclusion(buildIds = setOf("buildId1"))))), Group(setOf("groupId10"), listOf(TopLevelProject(Project("projectId1", listOf(Project("projectId2", listOf(Project("projectId3", emptyList(), listOf(Build("buildId3", "FAILURE")))), listOf(Build("buildId2", "NOT_FOUND")))), listOf(Build("buildId1", "FAILURE"))), Exclusion(buildIds = setOf("buildId3")))))), listOf("buildId1")),
-                        Arguments.of("groupId11", listOf(Group(setOf("groupId11"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "NOT_FOUND"), Build("buildId2", "FAILURE"), Build("buildId3", "NOT_FOUND"), Build("buildId4", "FAILURE"))), Exclusion(buildIds = setOf("buildId1")))))), listOf("buildId2", "buildId4")),
-                        Arguments.of("GrOupId12", listOf(Group(setOf("groupId12"), listOf(TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "FAILURE"))))))), listOf("buildId1")),
-                        Arguments.of("GROUPID13", listOf(Group(setOf("GrOuPId13"), listOf(TopLevelProject(Project("projectId1", listOf(Project("projectId2", listOf(Project("projectId3", emptyList(), listOf(Build("buildId3", "SUCCESS")))), listOf(Build("buildId2", "SUCCESS")))), listOf(Build("buildId1", "FAILURE"))))))), listOf("buildId1")))
+                        Arguments.of(
+                                "groupId1",
+                                listOf(Group(
+                                        setOf("groupId1"),
+                                        listOf(TopLevelProject(
+                                                Project(
+                                                        "projectId1",
+                                                        emptyList(),
+                                                        listOf(Build("buildId1", "FAILURE"))))))),
+                                listOf("buildId1")),
+
+                        Arguments.of(
+                                "groupId2",
+                                listOf(Group(
+                                        setOf("groupId2"),
+                                        listOf(TopLevelProject(
+                                                Project(
+                                                        "projectId1",
+                                                        emptyList(),
+                                                        listOf(
+                                                                Build("buildId1", "SUCCESS"),
+                                                                Build("buildId2", "FAILURE"))))))),
+                                listOf("buildId2")),
+
+                        Arguments.of(
+                                "groupId3",
+                                listOf(Group(
+                                        setOf("groupId3"),
+                                        listOf(TopLevelProject(
+                                                Project(
+                                                        "projectId1",
+                                                        listOf(Project(
+                                                                "subProjectId1.1",
+                                                                emptyList(),
+                                                                listOf(
+                                                                        Build("buildId1.1", "SUCCESS"),
+                                                                        Build("buildId1.2", "FAILURE")))),
+                                                        listOf(
+                                                                Build("buildId1", "SUCCESS"),
+                                                                Build("buildId2", "SUCCESS"),
+                                                                Build("buildId3", "SUCCESS"))))))),
+                                listOf("buildId1.2")),
+
+                        Arguments.of(
+                                "groupId4",
+                                listOf(Group(
+                                        setOf("groupId4"),
+                                        listOf(TopLevelProject(
+                                                Project(
+                                                        "projectId1",
+                                                        listOf(
+                                                                Project(
+                                                                        "projectId2",
+                                                                        listOf(
+                                                                                Project(
+                                                                                        "projectId3",
+                                                                                        emptyList(),
+                                                                                        listOf(Build("buildId3", "SUCCESS")))),
+                                                                        listOf(Build("buildId2", "SUCCESS")))),
+                                                        listOf(Build("buildId1", "FAILURE"))))))),
+                                listOf("buildId1")),
+
+                        Arguments.of(
+                                "groupId5",
+                                listOf(Group(
+                                        setOf("groupId2"),
+                                        listOf(TopLevelProject(
+                                                Project(
+                                                        "projectId1",
+                                                        emptyList(),
+                                                        listOf(Build("buildId1", "FAILURE")))))),
+                                        Group(setOf("groupId5"),
+                                                listOf(TopLevelProject(
+                                                        Project(
+                                                                "projectId1",
+                                                                listOf(
+                                                                        Project(
+                                                                                "projectId2",
+                                                                                listOf(
+                                                                                        Project(
+                                                                                                "projectId3",
+                                                                                                emptyList(),
+                                                                                                listOf(Build("buildId3", "FAILURE")))),
+                                                                                listOf(Build("buildId2", "SUCCESS")))),
+                                                                listOf(Build("buildId7", "FAILURE"))))))),
+                                listOf("buildId7", "buildId3")),
+
+                        Arguments.of(
+                                "groupId6",
+                                listOf(Group(
+                                        setOf("groupId7"),
+                                        listOf(TopLevelProject(
+                                                Project(
+                                                        "projectId1",
+                                                        emptyList(),
+                                                        listOf(Build("buildId1", "SUCCESS")))))),
+                                        Group(
+                                                setOf("groupId6"),
+                                                listOf(TopLevelProject(
+                                                        Project(
+                                                                "projectId1",
+                                                                listOf(
+                                                                        Project(
+                                                                                "projectId2",
+                                                                                listOf(
+                                                                                        Project(
+                                                                                                "projectId3",
+                                                                                                emptyList(),
+                                                                                                listOf(Build("buildId3", "FAILURE")))),
+                                                                                listOf(Build("buildId2", "FAILURE")))),
+                                                                listOf(Build("buildId1", "SUCCESS"))))))),
+                                listOf("buildId2", "buildId3")),
+
+                        Arguments.of(
+                                "groupId7",
+                                listOf(Group(
+                                        setOf("groupId7"),
+                                        listOf(TopLevelProject(
+                                                Project(
+                                                        "projectId1",
+                                                        emptyList(),
+                                                        listOf(
+                                                                Build("buildId1", "FAILURE"),
+                                                                Build("buildId2", "FAILURE"),
+                                                                Build("buildId3", "FAILURE"),
+                                                                Build("buildId4", "FAILURE"))),
+                                                Exclusion(buildIds = setOf("buildId1")))))),
+                                listOf("buildId2", "buildId3", "buildId4")),
+
+                        Arguments.of(
+                                "groupId8",
+                                listOf(Group(
+                                        setOf("groupId7"),
+                                        listOf(TopLevelProject(
+                                                Project(
+                                                        "projectId1",
+                                                        emptyList(),
+                                                        listOf(Build("buildId1", "SUCCESS")))))),
+                                        Group(
+                                                setOf("groupId8"),
+                                                listOf(TopLevelProject(
+                                                        Project(
+                                                                "projectId1",
+                                                                listOf(
+                                                                        Project(
+                                                                                "projectId2",
+                                                                                listOf(
+                                                                                        Project(
+                                                                                                "projectId3",
+                                                                                                emptyList(),
+                                                                                                listOf(Build("buildId3", "FAILURE")))),
+                                                                                listOf(Build("buildId2", "FAILURE")))),
+                                                                listOf(Build("buildId1", "SUCCESS"))),
+                                                        Exclusion(buildIds = setOf("buildId3")))))),
+                                listOf("buildId2")),
+
+                        Arguments.of(
+                                "groupId9",
+                                listOf(Group(
+                                        setOf("groupId8"),
+                                        listOf(TopLevelProject(
+                                                Project(
+                                                        "projectId1",
+                                                        emptyList(),
+                                                        listOf(Build("buildId1", "FAILURE"))),
+                                                Exclusion(buildIds = setOf("buildId1"))))),
+                                        Group(
+                                                setOf("groupId9"),
+                                                listOf(TopLevelProject(
+                                                        Project(
+                                                                "projectId1",
+                                                                listOf(
+                                                                        Project(
+                                                                                "projectId2",
+                                                                                listOf(
+                                                                                        Project(
+                                                                                                "projectId3",
+                                                                                                emptyList(),
+                                                                                                listOf(Build("buildId3", "FAILURE")))),
+                                                                                listOf(Build("buildId2", "FAILURE")))),
+                                                                listOf(Build("buildId1", "FAILURE"))),
+                                                        Exclusion(buildIds = setOf("buildId3")))))),
+                                listOf("buildId1", "buildId2")),
+
+                        Arguments.of(
+                                "groupId10",
+                                listOf(Group(
+                                        setOf("groupId8"),
+                                        listOf(TopLevelProject(
+                                                Project(
+                                                        "projectId1",
+                                                        emptyList(),
+                                                        listOf(Build("buildId1", "FAILURE"))),
+                                                Exclusion(buildIds = setOf("buildId1"))))),
+                                        Group(
+                                                setOf("groupId10"),
+                                                listOf(TopLevelProject(
+                                                        Project(
+                                                                "projectId1",
+                                                                listOf(
+                                                                        Project("projectId2",
+                                                                                listOf(
+                                                                                        Project(
+                                                                                                "projectId3",
+                                                                                                emptyList(),
+                                                                                                listOf(Build("buildId3", "FAILURE")))),
+                                                                                listOf(Build("buildId2", "NOT_FOUND")))),
+                                                                listOf(Build("buildId1", "FAILURE"))),
+                                                        Exclusion(buildIds = setOf("buildId3")))))),
+                                listOf("buildId1")),
+
+                        Arguments.of(
+                                "groupId11",
+                                listOf(Group(
+                                        setOf("groupId11"),
+                                        listOf(TopLevelProject(
+                                                Project(
+                                                        "projectId1",
+                                                        emptyList(),
+                                                        listOf(
+                                                                Build("buildId1", "NOT_FOUND"),
+                                                                Build("buildId2", "FAILURE"),
+                                                                Build("buildId3", "NOT_FOUND"),
+                                                                Build("buildId4", "FAILURE"))),
+                                                Exclusion(buildIds = setOf("buildId1")))))),
+                                listOf("buildId2", "buildId4")),
+
+                        Arguments.of(
+                                "GrOupId12",
+                                listOf(Group(
+                                        setOf("groupId12"),
+                                        listOf(TopLevelProject(
+                                                Project(
+                                                        "projectId1",
+                                                        emptyList(),
+                                                        listOf(Build("buildId1", "FAILURE"))))))),
+                                listOf("buildId1")),
+
+                        Arguments.of(
+                                "GROUPID13",
+                                listOf(Group(
+                                        setOf("GrOuPId13"),
+                                        listOf(TopLevelProject(
+                                                Project(
+                                                        "projectId1",
+                                                        listOf(
+                                                                Project(
+                                                                        "projectId2",
+                                                                        listOf(
+                                                                                Project(
+                                                                                        "projectId3",
+                                                                                        emptyList(),
+                                                                                        listOf(Build("buildId3", "SUCCESS")))),
+                                                                        listOf(Build("buildId2", "SUCCESS")))),
+                                                        listOf(Build("buildId1", "FAILURE"))))))),
+                                listOf("buildId1")),
+
+                        Arguments.of(
+                                "groupId14",
+                                listOf(Group(
+                                        setOf("groupId14"),
+                                        listOf(
+                                                TopLevelProject(
+                                                        Project(
+                                                                "projectId1",
+                                                                listOf(
+                                                                        Project(
+                                                                                "projectId1.1",
+                                                                                listOf(
+                                                                                        Project(
+                                                                                                "projectId1.2",
+                                                                                                emptyList(),
+                                                                                                listOf(Build("buildId1", "SUCCESS")))),
+                                                                                listOf(Build("buildId2", "SUCCESS")))),
+                                                                listOf(Build("buildId3", "FAILURE")))),
+                                                TopLevelProject(
+                                                        Project(
+                                                                "projectId2",
+                                                                listOf(
+                                                                        Project(
+                                                                                "projectId2.1",
+                                                                                listOf(
+                                                                                        Project(
+                                                                                                "projectId2.2",
+                                                                                                emptyList(),
+                                                                                                listOf(Build("buildId4", "FAILURE")))),
+                                                                                listOf(Build("buildId5", "SUCCESS")))),
+                                                                listOf(Build("buildId6", "FAILURE"))))))),
+                                listOf("buildId3", "buildId6", "buildId4")),
+
+                        Arguments.of(
+                                "groupId15",
+                                listOf(Group(
+                                        setOf("groupId15"),
+                                        listOf(
+                                                TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "SUCCESS")))),
+                                                TopLevelProject(
+                                                        Project(
+                                                                "projectId2",
+                                                                emptyList(),
+                                                                listOf(
+                                                                        Build("buildId2", "SUCCESS"),
+                                                                        Build("buildId3", "FAILURE"),
+                                                                        Build("buildId4", "SUCCESS")))),
+                                                TopLevelProject(Project("projectId3", emptyList(), listOf(Build("buildId5", "FAILURE")))),
+                                                TopLevelProject(
+                                                        Project(
+                                                                "projectId4",
+                                                                listOf(
+                                                                        Project(
+                                                                                "projectId4.1",
+                                                                                listOf(
+                                                                                        Project(
+                                                                                                "projectId4.2",
+                                                                                                emptyList(),
+                                                                                                listOf(Build("buildId6", "FAILURE")))),
+                                                                                listOf(Build("buildId7", "SUCCESS")))),
+                                                                listOf(Build("buildId8", "FAILURE"))))))),
+                                listOf("buildId3", "buildId5", "buildId8", "buildId6")))
     }
 }
