@@ -48,7 +48,7 @@ interface TeamCityClient {
 }
 
 @JacksonXmlRootElement(localName = "project")
-data class TeamCityProject(val buildTypes: List<TeamCityBuildType>, val projects: List<ProjectType>?) // TODO Can we use empty set instead of null
+data class TeamCityProject(val buildTypes: List<TeamCityBuildType>?, val projects: List<ProjectType>?) // TODO Can we use empty set instead of null
 
 @JacksonXmlRootElement(localName = "build")
 data class TeamCityBuild(val buildType: TeamCityBuildType, val id: String, val number: String?, val state: String, val status: String?)

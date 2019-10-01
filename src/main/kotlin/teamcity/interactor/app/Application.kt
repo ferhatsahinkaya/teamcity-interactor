@@ -5,10 +5,7 @@ import teamcity.interactor.client.buildserver.Name
 import teamcity.interactor.client.buildserver.getBuildServerClient
 import teamcity.interactor.client.reporting.*
 import teamcity.interactor.client.reporting.BuildStatus.*
-import teamcity.interactor.client.teamcity.TeamCityBuild
-import teamcity.interactor.client.teamcity.TeamCityBuildRequest
-import teamcity.interactor.client.teamcity.TeamCityBuildType
-import teamcity.interactor.client.teamcity.getTeamCityClient
+import teamcity.interactor.client.teamcity.*
 import teamcity.interactor.config.ConfigReader
 import java.util.*
 import kotlin.concurrent.fixedRateTimer
@@ -111,9 +108,8 @@ class Application internal constructor(private val buildConfig: BuildConfig = Co
         fun failedBuilds(projects: List<Project>): Set<String> {
             return projects
                     .flatMap { project ->
-                        val teamCityProject = teamCityClient.project(project.id)
-                        teamCityProject
-                                .buildTypes
+                        val teamCityProject = if (!project.exclusion.projectIds.contains(project.id)) teamCityClient.project(project.id) else TeamCityProject(emptyList(), emptyList())
+                        (teamCityProject.buildTypes ?: emptyList())
                                 .filterNot { project.exclusion.buildIds.contains(it.id) }
                                 .map { it.id }
                                 .mapNotNull {

@@ -194,7 +194,7 @@ class WatchStateTest {
     private fun givenTeamCityServerReturnsStateSuccessfully(projectsToExcludedBuildIds: List<Pair<Project, Exclusion>>) {
         projectsToExcludedBuildIds.forEach { projectToExclusion ->
             val project = projectToExclusion.first
-            val exlusion = projectToExclusion.second
+            val exclusion = projectToExclusion.second
 
             teamCityServer.stubFor(get(urlEqualTo("/projects/id:${project.id}"))
                     .withHeader("Accept", equalTo("application/xml"))
@@ -209,7 +209,7 @@ class WatchStateTest {
                                             "</project>")))
 
             project.builds
-                    .filterNot { exlusion.buildIds.contains(it.id) }
+                    .filterNot { exclusion.buildIds.contains(it.id) }
                     .forEach { build ->
                         if (build.status == "NOT_FOUND") {
                             teamCityServer.stubFor(get(urlEqualTo("/builds/buildType:${build.id}"))
@@ -228,7 +228,7 @@ class WatchStateTest {
                         }
                     }
 
-            givenTeamCityServerReturnsStateSuccessfully(project.subProjects.map { it to exlusion })
+            givenTeamCityServerReturnsStateSuccessfully(project.subProjects.map { it to exclusion })
         }
     }
 
@@ -254,6 +254,13 @@ class WatchStateTest {
 
     private fun verifyTeamCityServerGetStateIsNotCalledFor(exclusions: List<Exclusion>) =
             exclusions.forEach { exclusion ->
+                repeat(exclusion.projectIds.size) {
+                    teamCityServer.verify(0, getRequestedFor(urlEqualTo("/projects/id:$it"))
+                            .withHeader("Accept", equalTo("application/xml"))
+                            .withHeader("Content-Type", equalTo("application/xml"))
+                            .withBasicAuth(BasicCredentials(teamCityUserName, teamCityPassword)))
+                }
+
                 repeat(exclusion.buildIds.size) {
                     teamCityServer.verify(0, getRequestedFor(urlEqualTo("/builds/buildType:$it"))
                             .withHeader("Accept", equalTo("application/xml"))
@@ -263,25 +270,29 @@ class WatchStateTest {
             }
 
     private fun verifyTeamCityServerGetStateIsCalledFor(projectsToExclusion: List<Pair<Project, Exclusion>>) {
-        projectsToExclusion.forEach { projectsToExcludedBuildId ->
-            val project = projectsToExcludedBuildId.first
-            val exclusion = projectsToExcludedBuildId.second
+        projectsToExclusion.forEach { projectToExclusion ->
+            val project = projectToExclusion.first
+            val exclusion = projectToExclusion.second
 
-            teamCityServer.verify(1, getRequestedFor(urlEqualTo("/projects/id:${project.id}"))
-                    .withHeader("Accept", equalTo("application/xml"))
-                    .withHeader("Content-Type", equalTo("application/xml"))
-                    .withBasicAuth(BasicCredentials(teamCityUserName, teamCityPassword)))
-
-            project.builds
-                    .filterNot { exclusion.buildIds.contains(it.id) }
-                    .forEach { build ->
-                        teamCityServer.verify(1, getRequestedFor(urlEqualTo("/builds/buildType:${build.id}"))
+            project
+                    .takeUnless { exclusion.projectIds.contains(it.id) }
+                    ?.let {
+                        teamCityServer.verify(1, getRequestedFor(urlEqualTo("/projects/id:${it.id}"))
                                 .withHeader("Accept", equalTo("application/xml"))
                                 .withHeader("Content-Type", equalTo("application/xml"))
                                 .withBasicAuth(BasicCredentials(teamCityUserName, teamCityPassword)))
-                    }
 
-            verifyTeamCityServerGetStateIsCalledFor(project.subProjects.map { it to exclusion })
+                        project.builds
+                                .filterNot { build -> exclusion.buildIds.contains(build.id) }
+                                .forEach { build ->
+                                    teamCityServer.verify(1, getRequestedFor(urlEqualTo("/builds/buildType:${build.id}"))
+                                            .withHeader("Accept", equalTo("application/xml"))
+                                            .withHeader("Content-Type", equalTo("application/xml"))
+                                            .withBasicAuth(BasicCredentials(teamCityUserName, teamCityPassword)))
+                                }
+
+                        verifyTeamCityServerGetStateIsCalledFor(project.subProjects.map { subProject -> subProject to exclusion })
+                    }
         }
     }
 
@@ -547,19 +558,21 @@ class WatchStateTest {
                                 "groupId15",
                                 listOf(Group(
                                         setOf("groupId15"),
-                                        listOf(TopLevelProject(
-                                                Project(
-                                                        "projectId1",
-                                                        listOf(Project(
-                                                                "subProjectId1.1",
-                                                                emptyList(),
+                                        listOf(
+                                                TopLevelProject(
+                                                        Project(
+                                                                "projectId1",
+                                                                listOf(Project(
+                                                                        "subProjectId1.1",
+                                                                        emptyList(),
+                                                                        listOf(
+                                                                                Build("buildId1.1", "SUCCESS"),
+                                                                                Build("buildId1.2", "SUCCESS")))),
                                                                 listOf(
-                                                                        Build("buildId1.1", "SUCCESS"),
-                                                                        Build("buildId1.2", "SUCCESS")))),
-                                                        listOf(
-                                                                Build("buildId11", "SUCCESS"),
-                                                                Build("buildId12", "SUCCESS"),
-                                                                Build("buildId13", "SUCCESS")))),
+                                                                        Build("buildId11", "SUCCESS"),
+                                                                        Build("buildId12", "FAILURE"),
+                                                                        Build("buildId13", "SUCCESS"))),
+                                                        Exclusion(buildIds = setOf("buildId12"))),
                                                 TopLevelProject(
                                                         Project(
                                                                 "projectId2",
@@ -568,11 +581,12 @@ class WatchStateTest {
                                                                         emptyList(),
                                                                         listOf(
                                                                                 Build("buildId2.1", "SUCCESS"),
-                                                                                Build("buildId2.2", "SUCCESS")))),
+                                                                                Build("buildId2.2", "FAILURE")))),
                                                                 listOf(
                                                                         Build("buildId21", "SUCCESS"),
                                                                         Build("buildId22", "SUCCESS"),
-                                                                        Build("buildId23", "SUCCESS")))))))),
+                                                                        Build("buildId23", "SUCCESS"))),
+                                                        Exclusion(buildIds = setOf("buildId2.2"))))))),
 
                         Arguments.of(
                                 "groupId16",
@@ -585,7 +599,120 @@ class WatchStateTest {
                                         Group(
                                                 setOf("groupId17"),
                                                 listOf(
-                                                        TopLevelProject(Project("projectId3", emptyList(), listOf(Build("buildId11", "SUCCESS")))))))))
+                                                        TopLevelProject(Project("projectId3", emptyList(), listOf(Build("buildId11", "SUCCESS")))))))),
+
+                        Arguments.of(
+                                "groupId17",
+                                listOf(Group(
+                                        setOf("groupId17"),
+                                        listOf(TopLevelProject(
+                                                Project(
+                                                        "projectId1",
+                                                        emptyList(),
+                                                        listOf(
+                                                                Build("buildId1", "FAILURE"),
+                                                                Build("buildId2", "SUCCESS"))),
+                                                Exclusion(projectIds = setOf("projectId1"))))))),
+
+                        Arguments.of(
+                                "groupId18",
+                                listOf(Group(
+                                        setOf("groupId18"),
+                                        listOf(
+                                                TopLevelProject(
+                                                        Project(
+                                                                "projectId1",
+                                                                listOf(Project(
+                                                                        "subProjectId1.1",
+                                                                        emptyList(),
+                                                                        listOf(
+                                                                                Build("buildId1.1", "FAILURE"),
+                                                                                Build("buildId1.2", "SUCCESS")))),
+                                                                listOf(
+                                                                        Build("buildId11", "SUCCESS"),
+                                                                        Build("buildId12", "SUCCESS"),
+                                                                        Build("buildId13", "SUCCESS"))),
+                                                        Exclusion(buildIds = setOf("buildId1.1"))),
+                                                TopLevelProject(
+                                                        Project(
+                                                                "projectId2",
+                                                                listOf(Project(
+                                                                        "subProjectId2.1",
+                                                                        emptyList(),
+                                                                        listOf(
+                                                                                Build("buildId2.1", "SUCCESS"),
+                                                                                Build("buildId2.2", "FAILURE")))),
+                                                                listOf(
+                                                                        Build("buildId21", "SUCCESS"),
+                                                                        Build("buildId22", "SUCCESS"),
+                                                                        Build("buildId23", "SUCCESS"))),
+                                                        Exclusion(projectIds = setOf("subProjectId2.1"))))))),
+
+                        Arguments.of(
+                                "groupId19",
+                                listOf(Group(
+                                        setOf("groupId19"),
+                                        listOf(
+                                                TopLevelProject(
+                                                        Project(
+                                                                "projectId1",
+                                                                emptyList(),
+                                                                listOf(Build("buildId1", "FAILURE"))),
+                                                        Exclusion(buildIds = setOf("buildId1"))),
+                                                TopLevelProject(
+                                                        Project(
+                                                                "projectId2",
+                                                                emptyList(),
+                                                                listOf(Build("buildId2", "SUCCESS")))),
+                                                TopLevelProject(
+                                                        Project(
+                                                                "projectId3",
+                                                                emptyList(),
+                                                                listOf(Build("buildId3", "FAILURE"))),
+                                                        Exclusion(projectIds = setOf("projectId3"))),
+                                                TopLevelProject(
+                                                        Project(
+                                                                "projectId4",
+                                                                emptyList(),
+                                                                listOf(Build("buildId4", "SUCCESS")))))))),
+
+                        Arguments.of(
+                                "groupId20",
+                                listOf(Group(
+                                        setOf("groupId20"),
+                                        listOf(
+                                                TopLevelProject(
+                                                        Project(
+                                                                "projectId1",
+                                                                listOf(Project(
+                                                                        "subProjectId1.1",
+                                                                        emptyList(),
+                                                                        listOf(
+                                                                                Build("buildId1.1", "FAILURE"),
+                                                                                Build("buildId1.2", "SUCCESS")))),
+                                                                listOf(
+                                                                        Build("buildId11", "SUCCESS"),
+                                                                        Build("buildId12", "FAILURE"),
+                                                                        Build("buildId13", "SUCCESS"))),
+                                                        Exclusion(projectIds = setOf("subProjectId1.1"), buildIds = setOf("buildId12"))),
+                                                TopLevelProject(
+                                                        Project(
+                                                                "projectId2",
+                                                                listOf(Project(
+                                                                        "subProjectId2.1",
+                                                                        emptyList(),
+                                                                        listOf(
+                                                                                Build("buildId2.1", "SUCCESS"),
+                                                                                Build("buildId2.2", "FAILURE")))),
+                                                                listOf(
+                                                                        Build("buildId21", "SUCCESS"),
+                                                                        Build("buildId22", "SUCCESS"),
+                                                                        Build("buildId23", "SUCCESS"))),
+                                                        Exclusion(projectIds = setOf("subProjectId2.1"))))))),
+
+                        Arguments.of(
+                                "groupId21",
+                                listOf(Group(setOf("groupId21"), listOf(TopLevelProject(Project("projectId1", emptyList(), emptyList())))))))
 
         @JvmStatic
         fun someFailedBuildsTestCases(): Stream<Arguments> =
@@ -908,6 +1035,122 @@ class WatchStateTest {
                                                                                                 listOf(Build("buildId6", "FAILURE")))),
                                                                                 listOf(Build("buildId7", "SUCCESS")))),
                                                                 listOf(Build("buildId8", "FAILURE"))))))),
-                                listOf("buildId3", "buildId5", "buildId8", "buildId6")))
+                                listOf("buildId3", "buildId5", "buildId8", "buildId6")),
+
+                        Arguments.of(
+                                "groupId16",
+                                listOf(Group(
+                                        setOf("groupId16"),
+                                        listOf(
+                                                TopLevelProject(
+                                                        Project(
+                                                                "projectId1",
+                                                                emptyList(),
+                                                                listOf(
+                                                                        Build("buildId1", "NOT_FOUND"),
+                                                                        Build("buildId2", "FAILURE"),
+                                                                        Build("buildId3", "NOT_FOUND"),
+                                                                        Build("buildId4", "FAILURE"))),
+                                                        Exclusion(projectIds = setOf("projectId1"))),
+                                                TopLevelProject(
+                                                        Project(
+                                                                "projectId2",
+                                                                emptyList(),
+                                                                listOf(Build("buildId5", "FAILURE"))))))),
+                                listOf("buildId5")),
+
+                        Arguments.of(
+                                "groupId17",
+                                listOf(Group(
+                                        setOf("groupId17"),
+                                        listOf(
+                                                TopLevelProject(Project("projectId1", emptyList(), listOf(Build("buildId1", "SUCCESS")))),
+                                                TopLevelProject(
+                                                        Project(
+                                                                "projectId2",
+                                                                emptyList(),
+                                                                listOf(
+                                                                        Build("buildId2", "SUCCESS"),
+                                                                        Build("buildId3", "FAILURE"),
+                                                                        Build("buildId4", "SUCCESS"))),
+                                                        Exclusion(buildIds = setOf("buildId3"))),
+                                                TopLevelProject(Project("projectId3", emptyList(), listOf(Build("buildId5", "FAILURE")))),
+                                                TopLevelProject(
+                                                        Project(
+                                                                "projectId4",
+                                                                listOf(
+                                                                        Project(
+                                                                                "projectId4.1",
+                                                                                listOf(
+                                                                                        Project(
+                                                                                                "projectId4.2",
+                                                                                                emptyList(),
+                                                                                                listOf(Build("buildId6", "FAILURE")))),
+                                                                                listOf(Build("buildId7", "SUCCESS")))),
+                                                                listOf(Build("buildId8", "FAILURE"))),
+                                                        Exclusion(projectIds = setOf("projectId4.1"), buildIds = setOf("buildId8")))))),
+                                listOf("buildId5")),
+
+                        Arguments.of(
+                                "groupId18",
+                                listOf(
+                                        Group(
+                                                setOf("groupId4"),
+                                                listOf(
+                                                        TopLevelProject(
+                                                                Project(
+                                                                        "projectId1",
+                                                                        listOf(
+                                                                                Project(
+                                                                                        "projectId2",
+                                                                                        listOf(
+                                                                                                Project(
+                                                                                                        "projectId3",
+                                                                                                        emptyList(),
+                                                                                                        listOf(Build("buildId3", "SUCCESS")))),
+                                                                                        listOf(Build("buildId2", "SUCCESS")))),
+                                                                        listOf(Build("buildId1", "FAILURE")))))),
+
+                                        Group(
+                                                setOf("groupId18"),
+                                                listOf(
+                                                        TopLevelProject(
+                                                                Project(
+                                                                        "projectId4",
+                                                                        emptyList(),
+                                                                        listOf(Build("buildId4", "FAILURE"))),
+                                                                Exclusion(projectIds = setOf("projectId4"))),
+                                                        TopLevelProject(
+                                                                Project(
+                                                                        "projectId5",
+                                                                        listOf(
+                                                                                Project(
+                                                                                        "projectId6",
+                                                                                        listOf(
+                                                                                                Project(
+                                                                                                        "projectId7",
+                                                                                                        emptyList(),
+                                                                                                        listOf(
+                                                                                                                Build("buildId5", "FAILURE"),
+                                                                                                                Build("buildId6", "FAILURE"),
+                                                                                                                Build("buildId7", "NOT_FOUND")))),
+                                                                                        emptyList()),
+                                                                                Project(
+                                                                                        "projectId8",
+                                                                                        emptyList(),
+                                                                                        listOf(Build("buildId8", "FAILURE")))),
+                                                                        emptyList()),
+                                                                Exclusion(buildIds = setOf("buildId6")))))),
+                                listOf("buildId5", "buildId8")),
+
+                        Arguments.of(
+                                "groupId19",
+                                listOf(Group(setOf("groupId19"), listOf(
+                                        TopLevelProject(
+                                                Project(
+                                                        "projectId1",
+                                                        listOf(Project("projectId2", emptyList(), listOf(Build("buildId1", "FAILURE")))),
+                                                        emptyList()))))),
+                                listOf("buildId1")))
     }
 }
