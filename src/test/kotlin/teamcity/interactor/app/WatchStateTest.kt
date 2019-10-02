@@ -22,7 +22,6 @@ import kotlin.random.Random
 // TODO Test add test for no group configuration
 // TODO Test multiple state requests exist
 // TODO Test with included build ids
-// TODO Test with excluded project ids
 
 class WatchStateTest {
     private val teamCityUserName = "username-${Random.nextInt()}"
@@ -94,6 +93,32 @@ class WatchStateTest {
                     verifyBuildServerStateRequestsIsCalled()
                     verifySlackServerReportMessagesIsCalled("/responseUrl", listOf(reportingMessage))
                     verifyBuildServerDeleteStateRequestsIsCalled("NotExistingGroupId")
+                }
+    }
+
+    @Test
+    fun watchStateWithMatchingGroupIdAndProjectIdRegexWhenAllBuildsSuccessful() {
+        val underTest = Application(
+                buildConfig = BuildConfig(listOf(Group(setOf("groupId([0-9]+)"), listOf(Project("projectId%s")))), emptyList()),
+                jobConfigs = listOf(JobConfig("watchState", 0, Long.MAX_VALUE)),
+                buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
+                teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))
+        val reportingMessage = ReportingMessage("All *groupId28* builds are successful!", "https://cdn0.iconfinder.com/data/icons/social-messaging-ui-color-shapes/128/check-circle-green-512.png", "Success")
+        val projectsToExclusion = listOf(Pair(Project("projectId28", emptyList(), listOf(Build("buildId1", "SUCCESS"), Build("buildId2", "SUCCESS"))), Exclusion()))
+
+        givenBuildServerReturnsStateRequests(listOf(StateRequest("groupId28", "${slackServer.baseUrl()}/responseUrl")))
+        givenTeamCityServerReturnsStateSuccessfully(projectsToExclusion)
+        givenSlackServerAcceptsReportingMessages("/responseUrl", listOf(reportingMessage))
+        givenBuildServerDeletesStateRequestsSuccessfully("groupId28")
+
+        underTest.run()
+
+        await().atMost(2, SECONDS)
+                .untilAsserted {
+                    verifyBuildServerStateRequestsIsCalled()
+                    verifyTeamCityServerGetStateIsCalledFor(projectsToExclusion)
+                    verifySlackServerReportMessagesIsCalled("/responseUrl", listOf(reportingMessage))
+                    verifyBuildServerDeleteStateRequestsIsCalled("groupId28")
                 }
     }
 

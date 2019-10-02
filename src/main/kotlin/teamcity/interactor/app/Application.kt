@@ -9,6 +9,7 @@ import teamcity.interactor.client.teamcity.*
 import teamcity.interactor.config.ConfigReader
 import java.util.*
 import kotlin.concurrent.fixedRateTimer
+import kotlin.text.RegexOption.IGNORE_CASE
 
 data class BuildConfig(val groups: List<Group>, val builds: List<Build>)
 data class Group(val names: Set<String>, val projects: List<Project>)
@@ -131,14 +132,47 @@ class Application internal constructor(private val buildConfig: BuildConfig = Co
         job("watchState") {
             buildServerClient.getStateRequests()
                     .forEach { stateRequest ->
-                        val group = buildConfig.groups.firstOrNull { group -> group.names.any { id -> id.equals(stateRequest.id, true) } }
+                        var group = buildConfig.groups.firstOrNull { group -> group.names.any { id -> id.equals(stateRequest.id, true) } }
+                        var projects = group?.projects
+
+                        if (group == null) {
+                            group = buildConfig.groups
+                                    .firstOrNull { g ->
+                                        g
+                                                .names
+                                                .any { id ->
+                                                    (id
+                                                            .toRegex(IGNORE_CASE)
+                                                            .find(stateRequest.id)
+                                                            ?.groupValues?.size ?: 0) > 1
+                                                }
+                                    }
+
+                            if (group != null) {
+                                val replacement = group.names.first { v ->
+                                    (v.toRegex(IGNORE_CASE).find(stateRequest.id)
+                                            ?.groupValues?.size ?: 0) > 1
+                                }
+                                        .toRegex(IGNORE_CASE).find(stateRequest.id)?.groupValues?.get(1) ?: ""
+
+                                projects = group.projects
+                                        .map { project ->
+                                            Project(
+                                                    String.format(project.id, replacement),
+                                                    project.exclusion)
+                                        }
+                                println("Projects $projects")
+                            }
+                        }
+
+
                         if (group == null) {
                             reportingClient(stateRequest.responseUrl).report(Report(
                                     listOf(ReportingMessage(
                                             text = Text(text = "${stateRequest.id} group is not found"),
                                             buildStatus = NotFound))))
                         } else {
-                            val failedBuilds = failedBuilds(group.projects)
+                            val failedBuilds = failedBuilds(projects!!)
 
                             if (failedBuilds.isNotEmpty()) {
                                 reportingClient(stateRequest.responseUrl).report(Report(
