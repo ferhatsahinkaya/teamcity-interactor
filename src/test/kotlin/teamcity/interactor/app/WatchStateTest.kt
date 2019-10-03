@@ -74,26 +74,33 @@ class WatchStateTest {
                 }
     }
 
-    @Test
-    fun reportGroupNotFoundWhenSubmittedStateRequestCannotBeMappedToAGroupConfiguration() {
+    @ParameterizedTest
+    @MethodSource("groupNotFoundTestCases")
+    fun reportGroupNotFoundWhenSubmittedStateRequestCannotBeMappedToAGroupConfiguration(buildConfig: BuildConfig,
+                                                                                        projects: List<Project>,
+                                                                                        groupId: String,
+                                                                                        calledProjectIds: Set<String>,
+                                                                                        notCalledProjectIds: Set<String>) {
         val underTest = Application(
-                buildConfig = BuildConfig(listOf(Group(setOf("Provisioning"), listOf(Project("projectId-${Random.nextInt()}")))), listOf(Build("teamCityBuildName-${Random.nextInt()}", setOf("buildServerBuildName-${Random.nextInt()}")))),
+                buildConfig = buildConfig,
                 jobConfigs = listOf(JobConfig("watchState", 0, Long.MAX_VALUE)),
                 buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
                 teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))
-        val reportingMessage = ReportingMessage("NotExistingGroupId group is not found", "https://cdn3.iconfinder.com/data/icons/network-and-communications-8/32/network_Error_lost_no_page_not_found-512.png", "Not Found")
+        val reportingMessage = ReportingMessage("*$groupId* group is not found", "https://cdn3.iconfinder.com/data/icons/network-and-communications-8/32/network_Error_lost_no_page_not_found-512.png", "Not Found")
 
-        givenBuildServerReturnsStateRequests(listOf(StateRequest("NotExistingGroupId", "${slackServer.baseUrl()}/responseUrl")))
+        givenBuildServerReturnsStateRequests(listOf(StateRequest(groupId, "${slackServer.baseUrl()}/responseUrl")))
         givenSlackServerAcceptsReportingMessages("/responseUrl", listOf(reportingMessage))
-        givenBuildServerDeletesStateRequestsSuccessfully("NotExistingGroupId")
+        givenBuildServerDeletesStateRequestsSuccessfully(groupId)
 
         underTest.run()
 
         await().atMost(2, SECONDS)
                 .untilAsserted {
                     verifyBuildServerStateRequestsIsCalled()
+                    verifyTeamCityServerGetProjectStateIsCalledFor(calledProjectIds)
+                    verifyTeamCityServerGetProjectStateIsNotCalledFor(notCalledProjectIds)
                     verifySlackServerReportMessagesIsCalled("/responseUrl", listOf(reportingMessage))
-                    verifyBuildServerDeleteStateRequestsIsCalled("NotExistingGroupId")
+                    verifyBuildServerDeleteStateRequestsIsCalled(groupId)
                 }
     }
 
@@ -273,14 +280,16 @@ class WatchStateTest {
             }
 
     private fun verifyTeamCityServerGetProjectStateIsCalledFor(projectIds: Set<String>) =
-            verifyTeamCityServerGetProjectStateIsCalledFor(projectIds, 1)
+            projectIds.forEach {
+                teamCityServer.verify(getRequestedFor(urlEqualTo("/projects/id:$it"))
+                        .withHeader("Accept", equalTo("application/xml"))
+                        .withHeader("Content-Type", equalTo("application/xml"))
+                        .withBasicAuth(BasicCredentials(teamCityUserName, teamCityPassword)))
+            }
 
     private fun verifyTeamCityServerGetProjectStateIsNotCalledFor(projectIds: Set<String>) =
-            verifyTeamCityServerGetProjectStateIsCalledFor(projectIds, 0)
-
-    private fun verifyTeamCityServerGetProjectStateIsCalledFor(projectIds: Set<String>, times: Int) =
             projectIds.forEach {
-                teamCityServer.verify(times, getRequestedFor(urlEqualTo("/projects/id:$it"))
+                teamCityServer.verify(0, getRequestedFor(urlEqualTo("/projects/id:$it"))
                         .withHeader("Accept", equalTo("application/xml"))
                         .withHeader("Content-Type", equalTo("application/xml"))
                         .withBasicAuth(BasicCredentials(teamCityUserName, teamCityPassword)))
@@ -310,6 +319,53 @@ class WatchStateTest {
                     .withRequestBody(equalToJson(toJSONString(mapOf("id" to groupId)))))
 
     companion object {
+        @JvmStatic
+        fun groupNotFoundTestCases(): Stream<Arguments> =
+                Stream.of(
+                        Arguments.of(
+                                BuildConfig(listOf(
+                                        Group(
+                                                setOf("groupId1"),
+                                                listOf(Project("projectId1")))),
+                                        emptyList()),
+                                listOf(Project("projectId1", emptyList(), listOf(Build("buildId1", "SUCCESS")))),
+                                "NotExistingGroupId",
+                                emptySet<String>(),
+                                setOf("projectId1")),
+
+                        Arguments.of(
+                                BuildConfig(listOf(
+                                        Group(
+                                                setOf("groupId([0-9]+)"),
+                                                listOf(Project("projectId%s")))),
+                                        emptyList()),
+                                listOf(Project("projectId2", emptyList(), listOf(Build("buildId1", "SUCCESS")))),
+                                "groupId1",
+                                setOf("projectId1"),
+                                setOf("projectId2")),
+
+                        Arguments.of(
+                                BuildConfig(listOf(
+                                        Group(
+                                                setOf("([0-9]+)groupId"),
+                                                listOf(Project("project%sId")))),
+                                        emptyList()),
+                                listOf(Project("projectId1", emptyList(), listOf(Build("buildId1", "SUCCESS")))),
+                                "2groupId",
+                                setOf("project2Id"),
+                                setOf("projectId1")),
+
+                        Arguments.of(
+                                BuildConfig(listOf(
+                                        Group(
+                                                setOf("(\\w+)groupId"),
+                                                listOf(Project("%sProjectId")))),
+                                        emptyList()),
+                                listOf(Project("projectId1", emptyList(), listOf(Build("buildId1", "SUCCESS")))),
+                                "theGroupId",
+                                setOf("theProjectId"),
+                                setOf("projectId1")))
+
         @JvmStatic
         fun allSuccessfulBuildsTestCases(): Stream<Arguments> =
                 Stream.of(
@@ -763,13 +819,53 @@ class WatchStateTest {
                                 emptySet<String>()),
 
                         Arguments.of(
-                                BuildConfig(listOf(Group(setOf("groupId([0-9]+)"), listOf(Project("projectId%s")))), emptyList()),
-                                listOf(Project("projectId28", emptyList(), listOf(Build("buildId1", "SUCCESS"), Build("buildId2", "SUCCESS")))),
-                                "groupId28",
-                                setOf("projectId28"),
+                                BuildConfig(listOf(
+                                        Group(
+                                                setOf("groupId([0-9]+)"),
+                                                listOf(Project("projectId%s")))),
+                                        emptyList()),
+                                listOf(
+                                        Project(
+                                                "projectId22",
+                                                emptyList(),
+                                                listOf(
+                                                        Build("buildId1", "SUCCESS"),
+                                                        Build("buildId2", "SUCCESS")))),
+                                "groupId22",
+                                setOf("projectId22"),
                                 emptySet<String>(),
                                 emptySet<String>(),
-                                emptySet<String>()))
+                                emptySet<String>()),
+
+                        Arguments.of(
+                                BuildConfig(listOf(
+                                        Group(
+                                                setOf("groupId([0-9]+)"),
+                                                listOf(Project("projectId%s", teamcity.interactor.app.Exclusion(buildIds = setOf("buildId4")))))),
+                                        emptyList()),
+                                listOf(
+                                        Project(
+                                                "projectId23",
+                                                listOf(
+                                                        Project(
+                                                                "subProjectId1.1",
+                                                                listOf(
+                                                                        Project(
+                                                                                "subProjectId1.2",
+                                                                                emptyList(),
+                                                                                listOf(Build("buildId5", "SUCCESS")))),
+                                                                listOf(
+                                                                        Build("buildId3", "SUCCESS"),
+                                                                        Build("buildId4", "FAILURE"))
+                                                        )),
+                                                listOf(
+                                                        Build("buildId1", "SUCCESS"),
+                                                        Build("buildId2", "SUCCESS")))),
+                                "groupId23",
+                                setOf("projectId23", "subProjectId1.1", "subProjectId1.2"),
+                                emptySet<String>(),
+                                setOf("buildId1", "buildId2", "buildId3", "buildId5"),
+                                setOf("buildId4")))
 
         @JvmStatic
         fun someFailedBuildsTestCases(): Stream<Arguments> =
@@ -1298,6 +1394,32 @@ class WatchStateTest {
                                 setOf("projectId1", "projectId2"),
                                 emptySet<String>(),
                                 setOf("buildId1"),
-                                emptySet<String>()))
+                                emptySet<String>()),
+
+                        Arguments.of(
+                                BuildConfig(listOf(
+                                        Group(
+                                                setOf("groupId([0-9]+)"),
+                                                listOf(Project("projectId%s")))),
+                                        emptyList()),
+                                listOf(
+                                        Project(
+                                                "projectId20",
+                                                emptyList(),
+                                                listOf(
+                                                        Build("buildId1", "SUCCESS"),
+                                                        Build("buildId2", "FAILURE"))),
+                                        Project(
+                                                "projectId21",
+                                                emptyList(),
+                                                listOf(
+                                                        Build("buildId3", "SUCCESS"),
+                                                        Build("buildId4", "FAILURE")))),
+                                listOf("buildId2"),
+                                "groupId20",
+                                setOf("projectId20"),
+                                setOf("projectId21"),
+                                setOf("buildId1", "buildId2"),
+                                setOf("buildId3", "buildId4")))
     }
 }

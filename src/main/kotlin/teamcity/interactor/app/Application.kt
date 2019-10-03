@@ -134,15 +134,14 @@ class Application internal constructor(private val buildConfig: BuildConfig = Co
                     .forEach { stateRequest ->
                         var group = buildConfig.groups.firstOrNull { group -> group.names.any { id -> id.equals(stateRequest.id, true) } }
                         var projects = group?.projects
+                        var aProjectFound = true
 
                         if (group == null) {
                             group = buildConfig.groups
                                     .firstOrNull { g ->
-                                        g
-                                                .names
-                                                .any { id ->
-                                                    (id
-                                                            .toRegex(IGNORE_CASE)
+                                        g.names
+                                                .any {
+                                                    (it.toRegex(IGNORE_CASE)
                                                             .find(stateRequest.id)
                                                             ?.groupValues?.size ?: 0) > 1
                                                 }
@@ -162,14 +161,25 @@ class Application internal constructor(private val buildConfig: BuildConfig = Co
                                                     project.exclusion)
                                         }
                                 println("Projects $projects")
+
+                                aProjectFound = projects.any {
+                                    try {
+                                        if (it.exclusion.projectIds.contains(it.id)) false
+                                        else {
+                                            teamCityClient.project(it.id)
+                                            true
+                                        }
+                                    } catch (e: FeignException) {
+                                        false
+                                    }
+                                }
                             }
                         }
 
-
-                        if (group == null) {
+                        if (group == null || !aProjectFound) {
                             reportingClient(stateRequest.responseUrl).report(Report(
                                     listOf(ReportingMessage(
-                                            text = Text(text = "${stateRequest.id} group is not found"),
+                                            text = Text(text = "*${stateRequest.id}* group is not found"),
                                             buildStatus = NotFound))))
                         } else {
                             val failedBuilds = failedBuilds(projects!!)
