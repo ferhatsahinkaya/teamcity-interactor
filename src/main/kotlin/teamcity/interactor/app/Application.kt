@@ -123,8 +123,8 @@ class Application internal constructor(private val buildConfig: BuildConfig = Co
                                             null
                                         } else throw e
                                     }
-                                }.plus(failedBuilds(teamCityProject.projects?.map { Project(it.id, project.exclusion) }
-                                        ?: emptyList()))
+                                }.plus(failedBuilds((teamCityProject.projects
+                                        ?: emptyList()).map { Project(it.id, project.exclusion) }))
                     }
                     .toSet()
         }
@@ -132,71 +132,55 @@ class Application internal constructor(private val buildConfig: BuildConfig = Co
         job("watchState") {
             buildServerClient.getStateRequests()
                     .forEach { stateRequest ->
-                        var group = buildConfig.groups.firstOrNull { group -> group.names.any { id -> id.equals(stateRequest.id, true) } }
-                        var projects = group?.projects
-                        var aProjectFound = true
-
-                        if (group == null) {
-                            group = buildConfig.groups
-                                    .firstOrNull { g ->
-                                        g.names
-                                                .any {
-                                                    (it.toRegex(IGNORE_CASE)
-                                                            .find(stateRequest.id)
-                                                            ?.groupValues?.size ?: 0) > 1
-                                                }
-                                    }
-
-                            if (group != null) {
-                                val replacement = group.names.first { v ->
-                                    (v.toRegex(IGNORE_CASE).find(stateRequest.id)
-                                            ?.groupValues?.size ?: 0) > 1
+                        (buildConfig.groups.firstOrNull { group -> group.names.any { it.equals(stateRequest.id, true) } }?.projects
+                                ?: buildConfig.groups
+                                        .map { group ->
+                                            group
+                                                    .names
+                                                    .asSequence()
+                                                    .map { it.toRegex(IGNORE_CASE) }
+                                                    .mapNotNull { it.find(stateRequest.id) }
+                                                    .map { it.groupValues }
+                                                    .filter { it.size > 1 }
+                                                    .map { it[1] }
+                                                    .firstOrNull()
+                                                    ?.let { replacement -> group.projects.map { Project(String.format(it.id, replacement), it.exclusion) } }
+                                                    ?.takeIf { project ->
+                                                        project.any {
+                                                            try {
+                                                                if (it.exclusion.projectIds.contains(it.id)) false
+                                                                else {
+                                                                    teamCityClient.project(it.id)
+                                                                    true
+                                                                }
+                                                            } catch (e: FeignException) {
+                                                                false
+                                                            }
+                                                        }
+                                                    }
+                                        }.firstOrNull())
+                                ?.let { projects ->
+                                    failedBuilds(projects)
+                                            .takeIf { it.isNotEmpty() }
+                                            ?.let { p ->
+                                                reportingClient(stateRequest.responseUrl).report(Report(
+                                                        listOf(ReportingMessage(
+                                                                text = Text(text = p.joinToString(prefix = "Following *${stateRequest.id}* builds are currently failing:\n", separator = "\n") { "*$it*" }),
+                                                                buildStatus = Failure))))
+                                            }
+                                            ?: run {
+                                                reportingClient(stateRequest.responseUrl).report(Report(
+                                                        listOf(ReportingMessage(
+                                                                text = Text(text = "All *${stateRequest.id}* builds are successful!"),
+                                                                buildStatus = Success))))
+                                            }
                                 }
-                                        .toRegex(IGNORE_CASE).find(stateRequest.id)?.groupValues?.get(1) ?: ""
-
-                                projects = group.projects
-                                        .map { project ->
-                                            Project(
-                                                    String.format(project.id, replacement),
-                                                    project.exclusion)
-                                        }
-                                println("Projects $projects")
-
-                                aProjectFound = projects.any {
-                                    try {
-                                        if (it.exclusion.projectIds.contains(it.id)) false
-                                        else {
-                                            teamCityClient.project(it.id)
-                                            true
-                                        }
-                                    } catch (e: FeignException) {
-                                        false
-                                    }
+                                ?: run {
+                                    reportingClient(stateRequest.responseUrl).report(Report(
+                                            listOf(ReportingMessage(
+                                                    text = Text(text = "*${stateRequest.id}* group is not found"),
+                                                    buildStatus = NotFound))))
                                 }
-                            }
-                        }
-
-                        if (group == null || !aProjectFound) {
-                            reportingClient(stateRequest.responseUrl).report(Report(
-                                    listOf(ReportingMessage(
-                                            text = Text(text = "*${stateRequest.id}* group is not found"),
-                                            buildStatus = NotFound))))
-                        } else {
-                            val failedBuilds = failedBuilds(projects!!)
-
-                            if (failedBuilds.isNotEmpty()) {
-                                reportingClient(stateRequest.responseUrl).report(Report(
-                                        listOf(ReportingMessage(
-                                                text = Text(text = failedBuilds.joinToString(prefix = "Following *${stateRequest.id}* builds are currently failing:\n", separator = "\n") { "*$it*" }),
-                                                buildStatus = Failure))))
-
-                            } else {
-                                reportingClient(stateRequest.responseUrl).report(Report(
-                                        listOf(ReportingMessage(
-                                                text = Text(text = "All *${stateRequest.id}* builds are successful!"),
-                                                buildStatus = Success))))
-                            }
-                        }
                         buildServerClient.deleteStateRequest(Name(stateRequest.id))
                     }
         }

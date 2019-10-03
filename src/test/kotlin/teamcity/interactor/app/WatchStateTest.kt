@@ -865,7 +865,38 @@ class WatchStateTest {
                                 setOf("projectId23", "subProjectId1.1", "subProjectId1.2"),
                                 emptySet<String>(),
                                 setOf("buildId1", "buildId2", "buildId3", "buildId5"),
-                                setOf("buildId4")))
+                                setOf("buildId4")),
+
+                        Arguments.of(
+                                BuildConfig(listOf(
+                                        Group(
+                                                setOf("(\\w+)groupId"),
+                                                listOf(
+                                                        Project("%sProjectId"),
+                                                        Project("projectId24", teamcity.interactor.app.Exclusion(buildIds = setOf("buildId4")))))),
+                                        emptyList()),
+                                listOf(
+                                        Project(
+                                                "theProjectId",
+                                                emptyList(),
+                                                listOf(
+                                                        Build("buildId1", "SUCCESS"),
+                                                        Build("buildId2", "SUCCESS"))),
+                                        Project("projectId24",
+                                                listOf(
+                                                        Project(
+                                                                "projectId25",
+                                                                emptyList(),
+                                                                listOf(
+                                                                        Build("buildId3", "SUCCESS"),
+                                                                        Build("buildId4", "FAILURE")))),
+                                                listOf(Build("buildId5", "SUCCESS")))),
+                                "theGroupId",
+                                setOf("theProjectId", "projectId24"),
+                                setOf("buildId1", "buildId2", "buildId3", "buildId5"),
+                                emptySet<String>(),
+                                setOf("buildId4"))
+                )
 
         @JvmStatic
         fun someFailedBuildsTestCases(): Stream<Arguments> =
@@ -1420,6 +1451,37 @@ class WatchStateTest {
                                 setOf("projectId20"),
                                 setOf("projectId21"),
                                 setOf("buildId1", "buildId2"),
-                                setOf("buildId3", "buildId4")))
+                                setOf("buildId3", "buildId4")),
+
+                        Arguments.of(
+                                BuildConfig(listOf(
+                                        Group(
+                                                setOf("(\\w+)groupId"),
+                                                listOf(
+                                                        Project("%sProjectId"),
+                                                        Project("projectId24", teamcity.interactor.app.Exclusion(buildIds = setOf("buildId3")))))),
+                                        emptyList()),
+                                listOf(
+                                        Project(
+                                                "theProjectId",
+                                                emptyList(),
+                                                listOf(
+                                                        Build("buildId1", "SUCCESS"),
+                                                        Build("buildId2", "SUCCESS"))),
+                                        Project("projectId24",
+                                                listOf(
+                                                        Project(
+                                                                "projectId25",
+                                                                emptyList(),
+                                                                listOf(
+                                                                        Build("buildId3", "SUCCESS"),
+                                                                        Build("buildId4", "FAILURE")))),
+                                                listOf(Build("buildId5", "SUCCESS")))),
+                                listOf("buildId4"),
+                                "theGroupId",
+                                setOf("theProjectId", "projectId24"),
+                                setOf("buildId1", "buildId2", "buildId4"),
+                                emptySet<String>(),
+                                setOf("buildId3")))
     }
 }
