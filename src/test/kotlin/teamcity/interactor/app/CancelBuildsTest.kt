@@ -92,7 +92,7 @@ class CancelBuildsTest {
     fun doNotCancelAnyTeamCityBuildWhenThereIsNoSubmittedCancelRequest() {
         val underTest = Application(
                 buildConfig = BuildConfig(emptyList(), listOf(Build("teamCityBuildName-${Random.nextInt()}", setOf("buildServerBuildName-${Random.nextInt()}")))),
-                jobConfigs = listOf(JobConfig("cancelBuilds", 0, Long.MAX_VALUE)),
+                jobConfigs = JobConfig(listOf(Job("cancelBuilds", 0, Long.MAX_VALUE))),
                 buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
                 teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))
 
@@ -113,7 +113,7 @@ class CancelBuildsTest {
     fun reportBuildNotFoundWhenSubmittedCancelRequestCannotBeMappedToAnExistingBuild() {
         val underTest = Application(
                 buildConfig = BuildConfig(emptyList(), listOf(Build("teamCityBuildName-${Random.nextInt()}", setOf("buildServerBuildName-${Random.nextInt()}")))),
-                jobConfigs = listOf(JobConfig("cancelBuilds", 0, Long.MAX_VALUE)),
+                jobConfigs = JobConfig(listOf(Job("cancelBuilds", 0, Long.MAX_VALUE))),
                 buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
                 teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))
         val reportingMessage = ReportingMessage("No queued/running buildName build is found", "https://cdn3.iconfinder.com/data/icons/network-and-communications-8/32/network_Error_lost_no_page_not_found-512.png", "Not Found")
@@ -141,7 +141,7 @@ class CancelBuildsTest {
     fun cancelBuildsWithAlternativeBuildServerName(resourcePath: String) {
         val underTest = Application(
                 buildConfig = BuildConfig(emptyList(), listOf(Build("teamCityBuildName1", setOf("buildServerName1.1", "buildServerName1.2", "buildServerName1.3")), Build("teamCityBuildName2", setOf("buildServerName2")))),
-                jobConfigs = listOf(JobConfig("cancelBuilds", 0, Long.MAX_VALUE)),
+                jobConfigs = JobConfig(listOf(Job("cancelBuilds", 0, Long.MAX_VALUE))),
                 buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
                 teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))
         val buildInformationList = listOf(
@@ -170,7 +170,7 @@ class CancelBuildsTest {
     fun cancelBuildsWithIdOnceWhenThereAreMultipleCancelRequestsWithSameBuildServerName() {
         val underTest = Application(
                 buildConfig = BuildConfig(emptyList(), listOf(Build("teamCityBuildName1", setOf("buildServerName1")), Build("teamCityBuildName2", setOf("buildServerName2")))),
-                jobConfigs = listOf(JobConfig("cancelBuilds", 0, Long.MAX_VALUE)),
+                jobConfigs = JobConfig(listOf(Job("cancelBuilds", 0, Long.MAX_VALUE))),
                 buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
                 teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))
         val buildInformationList = listOf(
@@ -204,7 +204,7 @@ class CancelBuildsTest {
     fun cancelBuildsOnceWhenThereAreCancelRequestsForAlternativeNamesOfSameTeamCityBuild() {
         val underTest = Application(
                 buildConfig = BuildConfig(emptyList(), listOf(Build("teamCityBuildName1.1", setOf("buildServerName1.1", "buildServerName1.2", "buildServerName1.3")), Build("teamCityBuildName2", setOf("buildServerName2")))),
-                jobConfigs = listOf(JobConfig("cancelBuilds", 0, Long.MAX_VALUE)),
+                jobConfigs = JobConfig(listOf(Job("cancelBuilds", 0, Long.MAX_VALUE))),
                 buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
                 teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))
         val buildInformationList = listOf(
@@ -242,7 +242,7 @@ class CancelBuildsTest {
     fun cancelBuilds(testConfig: TestConfiguration) {
         val underTest = Application(
                 buildConfig = testConfig.buildConfig,
-                jobConfigs = listOf(JobConfig("cancelBuilds", 0, Long.MAX_VALUE)),
+                jobConfigs = JobConfig(listOf(Job("cancelBuilds", 0, Long.MAX_VALUE))),
                 buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
                 teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))
         underTest.setBuilds { testConfig.buildInformationList }

@@ -16,12 +16,13 @@ data class Group(val names: Set<String>, val projects: List<Project>)
 data class Project(val id: String, val exclusion: Exclusion = Exclusion())
 data class Exclusion(val projectIds: Set<String> = emptySet(), val buildIds: Set<String> = emptySet())
 data class Build(val id: String, val names: Set<String>)
-data class JobConfig(val name: String, val initialDelay: Long, val period: Long)
+data class JobConfig(val jobs: List<Job>)
+data class Job(val name: String, val initialDelay: Long, val period: Long)
 data class BuildServerConfig(val baseUrl: String)
 data class TeamCityServerConfig(val baseUrl: String, val username: String, val password: String)
 
 class Application internal constructor(private val buildConfig: BuildConfig = ConfigReader().config("build-config.json", BuildConfig::class.java),
-                                       private val jobConfigs: List<JobConfig> = ConfigReader().jobConfig("job-config.json"),
+                                       private val jobConfigs: JobConfig = ConfigReader().config("job-config.json", JobConfig::class.java),
                                        buildServerConfig: BuildServerConfig = ConfigReader().config("build-server-config.json", BuildServerConfig::class.java),
                                        teamCityServerConfig: TeamCityServerConfig = ConfigReader().config("teamcity-server-config.json", TeamCityServerConfig::class.java)) {
 
@@ -187,7 +188,7 @@ class Application internal constructor(private val buildConfig: BuildConfig = Co
     }
 
     private fun job(name: String, timerTask: TimerTask.() -> Unit) =
-            jobConfigs
+            jobConfigs.jobs
                     .firstOrNull { it.name == name }
                     ?.let { fixedRateTimer(it.name, false, it.initialDelay, it.period, timerTask) }
 

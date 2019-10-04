@@ -48,9 +48,6 @@ class WatchStateTest {
     data class StateRequest(val groupId: String, val responseUrl: String)
     data class ReportingMessage(val text: String, val imageUrl: String, val altText: String)
 
-    data class Group(val names: Set<String>, val projects: List<TopLevelProject>)
-    data class TopLevelProject(val project: Project, val exclusion: Exclusion = Exclusion())
-    data class Exclusion(val projectIds: Set<String> = emptySet(), val buildIds: Set<String> = emptySet())
     data class Project(val id: String, val subProjects: List<Project>, val builds: List<Build>)
     data class Build(val id: String, val status: String)
 
@@ -58,7 +55,7 @@ class WatchStateTest {
     fun doNotCheckStatusWhenThereIsNoStateRequestsToWatch() {
         val underTest = Application(
                 buildConfig = BuildConfig(listOf(Group(setOf("Provisioning"), listOf(Project("projectId-${Random.nextInt()}")))), listOf(Build("teamCityBuildName-${Random.nextInt()}", setOf("buildServerBuildName-${Random.nextInt()}")))),
-                jobConfigs = listOf(JobConfig("watchState", 0, Long.MAX_VALUE)),
+                jobConfigs = JobConfig(listOf(Job("watchState", 0, Long.MAX_VALUE))),
                 buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
                 teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))
 
@@ -83,7 +80,7 @@ class WatchStateTest {
                                                                                         notCalledProjectIds: Set<String>) {
         val underTest = Application(
                 buildConfig = buildConfig,
-                jobConfigs = listOf(JobConfig("watchState", 0, Long.MAX_VALUE)),
+                jobConfigs = JobConfig(listOf(Job("watchState", 0, Long.MAX_VALUE))),
                 buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
                 teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))
         val reportingMessage = ReportingMessage("*$groupId* group is not found", "https://cdn3.iconfinder.com/data/icons/network-and-communications-8/32/network_Error_lost_no_page_not_found-512.png", "Not Found")
@@ -115,7 +112,7 @@ class WatchStateTest {
                                           notCalledBuildIds: Set<String>) {
         val underTest = Application(
                 buildConfig = buildConfig,
-                jobConfigs = listOf(JobConfig("watchState", 0, Long.MAX_VALUE)),
+                jobConfigs = JobConfig(listOf(Job("watchState", 0, Long.MAX_VALUE))),
                 buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
                 teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))
         val reportingMessage = ReportingMessage("All *${groupId}* builds are successful!", "https://cdn0.iconfinder.com/data/icons/social-messaging-ui-color-shapes/128/check-circle-green-512.png", "Success")
@@ -151,7 +148,7 @@ class WatchStateTest {
                                        notCalledBuildIds: Set<String>) {
         val underTest = Application(
                 buildConfig = buildConfig,
-                jobConfigs = listOf(JobConfig("watchState", 0, Long.MAX_VALUE)),
+                jobConfigs = JobConfig(listOf(Job("watchState", 0, Long.MAX_VALUE))),
                 buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
                 teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))
         val reportingMessage = ReportingMessage(failedBuildsIds.joinToString(prefix = "Following *$groupId* builds are currently failing:\n", separator = "\n") { "*$it*" }, "https://cdn0.iconfinder.com/data/icons/social-messaging-ui-color-shapes/128/close-circle-red-512.png", "Failure")

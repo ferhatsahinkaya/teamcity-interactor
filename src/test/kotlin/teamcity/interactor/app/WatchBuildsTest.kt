@@ -49,7 +49,7 @@ class WatchBuildsTest {
     fun doNotCheckStatusWhenThereIsNoBuildInformationToWatch() {
         val underTest = Application(
                 buildConfig = BuildConfig(emptyList(), listOf(Build("teamCityBuildName-${Random.nextInt()}", setOf("buildServerBuildName-${Random.nextInt()}")))),
-                jobConfigs = listOf(JobConfig("watchBuilds", 0, Long.MAX_VALUE)),
+                jobConfigs = JobConfig(listOf(Job("watchBuilds", 0, Long.MAX_VALUE))),
                 buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
                 teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))
 
@@ -74,7 +74,7 @@ class WatchBuildsTest {
     fun watchActiveBuilds(initialState: String, finalState: String, finalStatus: String, displayName: String, imageUrl: String, altText: String) {
         val underTest = Application(
                 buildConfig = BuildConfig(emptyList(), emptyList()),
-                jobConfigs = listOf(JobConfig("watchBuilds", 0, Long.MAX_VALUE)),
+                jobConfigs = JobConfig(listOf(Job("watchBuilds", 0, Long.MAX_VALUE))),
                 buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
                 teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))
         underTest.setBuilds { listOf(BuildInformation(TeamCityBuild(TeamCityBuildType("teamCityBuildName", "TeamCityDisplayName"), "teamCityBuildId", null, initialState, null), "${slackServer.baseUrl()}/responseUrl")) }
@@ -110,7 +110,7 @@ class WatchBuildsTest {
     fun watchFinishedBuilds(initialState: String, finalState: String, finalStatus: String, displayName: String, imageUrl: String, altText: String) {
         val underTest = Application(
                 buildConfig = BuildConfig(emptyList(), emptyList()),
-                jobConfigs = listOf(JobConfig("watchBuilds", 0, Long.MAX_VALUE)),
+                jobConfigs = JobConfig(listOf(Job("watchBuilds", 0, Long.MAX_VALUE))),
                 buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
                 teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))
         underTest.setBuilds { listOf(BuildInformation(TeamCityBuild(TeamCityBuildType("teamCityBuildName", "TeamCityBuildDisplayName"), "teamCityBuildId", null, initialState, null), "${slackServer.baseUrl()}/responseUrl")) }

@@ -76,7 +76,7 @@ class TriggerBuildsTest {
     fun doNotTriggerAnyTeamCityBuildWhenThereIsNoSubmittedBuildRequest() {
         val underTest = Application(
                 buildConfig = BuildConfig(emptyList(), listOf(Build("teamCityBuildName-${Random.nextInt()}", setOf("buildServerBuildName-${Random.nextInt()}")))),
-                jobConfigs = listOf(JobConfig("triggerBuilds", 0, Long.MAX_VALUE)),
+                jobConfigs = JobConfig(listOf(Job("triggerBuilds", 0, Long.MAX_VALUE))),
                 buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
                 teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))
 
@@ -98,7 +98,7 @@ class TriggerBuildsTest {
     fun reportBuildNotFoundWhenSubmittedBuildRequestCannotBeMappedToABuildConfiguration() {
         val underTest = Application(
                 buildConfig = BuildConfig(emptyList(), listOf(Build("teamCityBuildName-${Random.nextInt()}", setOf("buildServerBuildName-${Random.nextInt()}")))),
-                jobConfigs = listOf(JobConfig("triggerBuilds", 0, Long.MAX_VALUE)),
+                jobConfigs = JobConfig(listOf(Job("triggerBuilds", 0, Long.MAX_VALUE))),
                 buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
                 teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))
         val reportingMessage = ReportingMessage("buildName build is not found", "https://cdn3.iconfinder.com/data/icons/network-and-communications-8/32/network_Error_lost_no_page_not_found-512.png", "Not Found")
@@ -125,7 +125,7 @@ class TriggerBuildsTest {
     fun triggerBuilds(testConfig: TestConfiguration) {
         val underTest = Application(
                 buildConfig = testConfig.buildConfig,
-                jobConfigs = listOf(JobConfig("triggerBuilds", 0, Long.MAX_VALUE)),
+                jobConfigs = JobConfig(listOf(Job("triggerBuilds", 0, Long.MAX_VALUE))),
                 buildServerConfig = BuildServerConfig(buildServer.baseUrl()),
                 teamCityServerConfig = TeamCityServerConfig(teamCityServer.baseUrl(), teamCityUserName, teamCityPassword))
 
