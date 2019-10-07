@@ -18,10 +18,7 @@ import java.util.concurrent.TimeUnit.SECONDS
 import java.util.stream.Stream
 import kotlin.random.Random
 
-// TODO Test multiple top level project under same group
-// TODO Test add test for no group configuration
 // TODO Test multiple state requests exist
-// TODO Test with included build ids
 // TODO Test multiple groupIds matching the given name, use the first group
 
 class WatchStateTest {

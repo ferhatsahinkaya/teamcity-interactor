@@ -306,7 +306,6 @@ class CancelBuildsTest {
                                         .withStatus(200)))
                     }
 
-    // TODO Find xml builder
     private fun givenTeamCityServerCancelsBuildsSuccessfully(teamCityServerIdToResourcePaths: List<TeamCityServerIdToResourcePath>) =
             teamCityServerIdToResourcePaths
                     .forEach {
@@ -323,7 +322,6 @@ class CancelBuildsTest {
             buildServer.verify(1, getRequestedFor(urlEqualTo("/cancel"))
                     .withHeader("Accept", equalTo("application/json")))
 
-    // TODO Find xml builder
     private fun verifyTeamCityServerCancelRequestsIsCalledFor(teamCityServerIdToResourcePaths: List<TeamCityServerIdToResourcePath>) =
             teamCityServerIdToResourcePaths
                     .forEach {

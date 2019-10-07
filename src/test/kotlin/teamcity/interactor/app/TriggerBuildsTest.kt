@@ -188,7 +188,6 @@ class TriggerBuildsTest {
                                         .withStatus(200)))
                     }
 
-    // TODO Find xml builder
     private fun givenTeamCityServerCreatesBuildsSuccessfully(teamCityBuilds: List<TeamCityServerBuild>) =
             teamCityBuilds
                     .forEach {
@@ -206,7 +205,6 @@ class TriggerBuildsTest {
             buildServer.verify(getRequestedFor(urlEqualTo("/build"))
                     .withHeader("Accept", equalTo("application/json")))
 
-    // TODO Find xml builder
     private fun verifyTeamCityServerBuildIsCalledFor(teamCityBuildNames: List<String>) =
             teamCityBuildNames
                     .forEach {

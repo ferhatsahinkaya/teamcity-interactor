@@ -151,7 +151,6 @@ class WatchBuildsTest {
                                                 )
                                             })))))
 
-    // TODO Find xml builder
     private fun givenTeamCityServerReturnsStatusSuccessfully(teamCityBuild: TeamCityBuild) =
             teamCityServer.stubFor(get(urlEqualTo("/buildQueue/id:${teamCityBuild.id}"))
                     .withHeader("Accept", equalTo("application/xml"))
