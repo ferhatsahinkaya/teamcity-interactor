@@ -5,7 +5,10 @@ import teamcity.interactor.client.buildserver.Name
 import teamcity.interactor.client.buildserver.getBuildServerClient
 import teamcity.interactor.client.reporting.*
 import teamcity.interactor.client.reporting.BuildStatus.*
-import teamcity.interactor.client.teamcity.*
+import teamcity.interactor.client.teamcity.TeamCityBuild
+import teamcity.interactor.client.teamcity.TeamCityBuildRequest
+import teamcity.interactor.client.teamcity.TeamCityBuildType
+import teamcity.interactor.client.teamcity.getTeamCityClient
 import teamcity.interactor.config.ConfigReader
 import java.util.*
 import kotlin.concurrent.fixedRateTimer
@@ -64,14 +67,16 @@ class Application internal constructor(private val buildConfig: BuildConfig = Co
                     val latestTeamCityBuild = teamCityClient.status(buildInformation.teamCityBuild.id)
                     latestTeamCityBuild
                             .takeUnless { buildInformation.teamCityBuild.state == it.state }
-                            ?.let {
-                                val buildStatus = BuildStatus.of(latestTeamCityBuild.state, latestTeamCityBuild.status)
+                            ?.let { BuildStatus.of(it.state, it.status) }
+                            ?.let { buildStatus ->
                                 reportingClient(buildInformation.responseUrl).report(Report(
                                         listOf(ReportingMessage(
                                                 text = Text(text = "*${latestTeamCityBuild.buildType.name}* build ${latestTeamCityBuild.number?.let { "*$it* " }.orEmpty()}is ${buildStatus.displayName}"),
                                                 buildStatus = buildStatus))))
                             }
-                    if (latestTeamCityBuild.state != "finished") BuildInformation(latestTeamCityBuild, buildInformation.responseUrl) else null
+                    latestTeamCityBuild
+                            .takeUnless { it.state == "finished" }
+                            ?.let { BuildInformation(it, buildInformation.responseUrl) }
                 }
             }
             println("watchBuilds: $builds")
@@ -110,22 +115,33 @@ class Application internal constructor(private val buildConfig: BuildConfig = Co
         fun failedBuilds(projects: List<Project>): Set<String> {
             return projects
                     .flatMap { project ->
-                        val teamCityProject = if (!project.exclusion.projectIds.contains(project.id)) teamCityClient.project(project.id) else TeamCityProject(emptyList(), emptyList())
-                        (teamCityProject.buildTypes ?: emptyList())
-                                .filterNot { project.exclusion.buildIds.contains(it.id) }
-                                .map { it.id }
-                                .mapNotNull {
+                        val teamCityProject = project
+                                .takeUnless { it.exclusion.projectIds.contains(it.id) }
+                                ?.let { teamCityClient.project(it.id) }
+
+                        val childBuildFailures = teamCityProject
+                                ?.buildTypes
+                                ?.filterNot { project.exclusion.buildIds.contains(it.id) }
+                                ?.map { it.id }
+                                ?.mapNotNull {
                                     try {
-                                        val state = teamCityClient.state(it)
-                                        if (Success != BuildStatus.of(state.state, state.status)) state.buildType.name else null
+                                        teamCityClient.state(it)
+                                                .takeUnless { state -> BuildStatus.of(state.state, state.status) == Success }
+                                                ?.buildType
+                                                ?.name
                                     } catch (e: FeignException) {
                                         if (e.status() == 404) {
                                             println("Build $it not found. Ignoring the build failure")
                                             null
                                         } else throw e
                                     }
-                                }.plus(failedBuilds((teamCityProject.projects
-                                        ?: emptyList()).map { Project(it.id, project.exclusion) }))
+                                } ?: emptyList()
+
+                        childBuildFailures.plus(teamCityProject
+                                ?.projects
+                                ?.map { Project(it.id, project.exclusion) }
+                                ?.let { failedBuilds(it) }
+                                ?: emptyList())
                     }
                     .toSet()
         }
@@ -183,6 +199,7 @@ class Application internal constructor(private val buildConfig: BuildConfig = Co
                                                     buildStatus = NotFound))))
                                 }
                         buildServerClient.deleteStateRequest(Name(stateRequest.id))
+                        println(stateRequest.responseUrl)
                     }
         }
     }

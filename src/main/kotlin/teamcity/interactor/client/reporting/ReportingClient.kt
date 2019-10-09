@@ -45,10 +45,6 @@ enum class BuildStatus(val type: String = "image", @JsonIgnore val displayName: 
     NotFound(displayName = "not found", state = "notfound", statusPredicate = { throw UnsupportedOperationException() }, image_url = "https://cdn3.iconfinder.com/data/icons/network-and-communications-8/32/network_Error_lost_no_page_not_found-512.png", alt_text = "Not Found");
 
     companion object {
-        fun of(state: String, status: String?): BuildStatus {
-            println("state $state, status $status")
-            return values()
-                    .first { it.state == state && it.statusPredicate(status) }
-        }
+        fun of(state: String, status: String?) = values().first { it.state == state && it.statusPredicate(status) }
     }
 }

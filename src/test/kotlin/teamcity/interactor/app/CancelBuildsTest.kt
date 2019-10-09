@@ -236,7 +236,6 @@ class CancelBuildsTest {
                 }
     }
 
-    // TODO Use better display names for parameterized test rows
     @ParameterizedTest
     @MethodSource("cancelBuildsSuccessfullyTestCases")
     fun cancelBuilds(testConfig: TestConfiguration) {

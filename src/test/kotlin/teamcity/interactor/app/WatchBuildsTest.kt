@@ -65,7 +65,6 @@ class WatchBuildsTest {
                 }
     }
 
-    // TODO Use better display names for parameterized test rows
     @ParameterizedTest
     @CsvSource(
             "none, queued, any-status, queued, https://cdn1.iconfinder.com/data/icons/company-business-people-1/32/busibess_people-40-512.png, Queued",
@@ -95,7 +94,6 @@ class WatchBuildsTest {
                 }
     }
 
-    // TODO Use better display names for parameterized test rows
     @ParameterizedTest
     @CsvSource(
             "none, finished, SUCCESS, finished successfully, https://cdn0.iconfinder.com/data/icons/social-messaging-ui-color-shapes/128/check-circle-green-512.png, Success",

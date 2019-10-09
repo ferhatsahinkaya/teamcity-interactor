@@ -246,15 +246,6 @@ class WatchStateTest {
                     .willReturn(aResponse()
                             .withStatus(200)))
 
-    private fun givenTeamCityServerReturnsStateNotExisting(buildIds: Set<String>) =
-            buildIds.forEach {
-                teamCityServer.stubFor(get(urlEqualTo("/builds/buildType:$it"))
-                        .withHeader("Accept", equalTo("application/xml"))
-                        .withHeader("Content-Type", equalTo("application/xml"))
-                        .withBasicAuth(teamCityUserName, teamCityPassword)
-                        .willReturn(aResponse().withStatus(404)))
-            }
-
     private fun verifyBuildServerStateRequestsIsCalled() =
             buildServer.verify(getRequestedFor(urlEqualTo("/state"))
                     .withHeader("Accept", equalTo("application/json")))
@@ -364,7 +355,7 @@ class WatchStateTest {
         fun allSuccessfulBuildsTestCases(): Stream<Arguments> =
                 Stream.of(
                         Arguments.of(
-                                BuildConfig(listOf(teamcity.interactor.app.Group(setOf("groupId1"), emptyList())), emptyList()),
+                                BuildConfig(listOf(Group(setOf("groupId1"), emptyList())), emptyList()),
                                 emptyList<String>(),
                                 "groupId1",
                                 emptySet<String>(),
@@ -483,7 +474,7 @@ class WatchStateTest {
                                 setOf("buildId2", "buildId3", "buildId4")),
 
                         Arguments.of(
-                                BuildConfig(listOf(Group(setOf("groupId8"), listOf(Project("projectId1", teamcity.interactor.app.Exclusion(buildIds = setOf("buildId2")))))), emptyList()),
+                                BuildConfig(listOf(Group(setOf("groupId8"), listOf(Project("projectId1", Exclusion(buildIds = setOf("buildId2")))))), emptyList()),
                                 listOf(Project(
                                         "projectId1",
                                         emptyList(),
@@ -497,7 +488,7 @@ class WatchStateTest {
                                 setOf("buildId2")),
 
                         Arguments.of(
-                                BuildConfig(listOf(Group(setOf("groupId9"), listOf(Project("projectId1", teamcity.interactor.app.Exclusion(buildIds = setOf("buildId4", "buildId5")))))), emptyList()),
+                                BuildConfig(listOf(Group(setOf("groupId9"), listOf(Project("projectId1", Exclusion(buildIds = setOf("buildId4", "buildId5")))))), emptyList()),
                                 listOf(
                                         Project(
                                                 "projectId4",
@@ -561,7 +552,7 @@ class WatchStateTest {
 
                         Arguments.of(
                                 BuildConfig(listOf(
-                                        Group(setOf("groupId12"), listOf(Project("projectId1", teamcity.interactor.app.Exclusion(buildIds = setOf("buildId4"))))),
+                                        Group(setOf("groupId12"), listOf(Project("projectId1", Exclusion(buildIds = setOf("buildId4"))))),
                                         Group(setOf("groupId2"), listOf(Project("project4")))), emptyList()),
                                 listOf(
                                         Project(
@@ -628,8 +619,8 @@ class WatchStateTest {
                                         Group(
                                                 setOf("groupId15"),
                                                 listOf(
-                                                        Project("projectId1", teamcity.interactor.app.Exclusion(buildIds = setOf("buildId12"))),
-                                                        Project("projectId2", teamcity.interactor.app.Exclusion(buildIds = setOf("buildId2.2")))))),
+                                                        Project("projectId1", Exclusion(buildIds = setOf("buildId12"))),
+                                                        Project("projectId2", Exclusion(buildIds = setOf("buildId2.2")))))),
                                         emptyList()),
                                 listOf(
                                         Project(
@@ -678,7 +669,7 @@ class WatchStateTest {
                                 setOf("buildId31")),
 
                         Arguments.of(
-                                BuildConfig(listOf(Group(setOf("groupId17"), listOf(Project("projectId1", teamcity.interactor.app.Exclusion(projectIds = setOf("projectId1")))))), emptyList()),
+                                BuildConfig(listOf(Group(setOf("groupId17"), listOf(Project("projectId1", Exclusion(projectIds = setOf("projectId1")))))), emptyList()),
                                 listOf(
                                         Project(
                                                 "projectId1",
@@ -697,8 +688,8 @@ class WatchStateTest {
                                         Group(
                                                 setOf("groupId18"),
                                                 listOf(
-                                                        Project("projectId1", teamcity.interactor.app.Exclusion(buildIds = setOf("buildId1.1"))),
-                                                        Project("projectId2", teamcity.interactor.app.Exclusion(projectIds = setOf("subProjectId2.1")))))),
+                                                        Project("projectId1", Exclusion(buildIds = setOf("buildId1.1"))),
+                                                        Project("projectId2", Exclusion(projectIds = setOf("subProjectId2.1")))))),
                                         emptyList()),
                                 listOf(
                                         Project(
@@ -736,9 +727,9 @@ class WatchStateTest {
                                         Group(
                                                 setOf("groupId19"),
                                                 listOf(
-                                                        Project("projectId1", teamcity.interactor.app.Exclusion(buildIds = setOf("buildId1"))),
+                                                        Project("projectId1", Exclusion(buildIds = setOf("buildId1"))),
                                                         Project("projectId2"),
-                                                        Project("projectId3", teamcity.interactor.app.Exclusion(projectIds = setOf("projectId3"))),
+                                                        Project("projectId3", Exclusion(projectIds = setOf("projectId3"))),
                                                         Project("projectId4")))),
                                         emptyList()),
                                 listOf(
@@ -769,8 +760,8 @@ class WatchStateTest {
                                         Group(
                                                 setOf("groupId20"),
                                                 listOf(
-                                                        Project("projectId1", teamcity.interactor.app.Exclusion(projectIds = setOf("subProjectId1.1"), buildIds = setOf("buildId12"))),
-                                                        Project("projectId2", teamcity.interactor.app.Exclusion(projectIds = setOf("subProjectId2.1")))))),
+                                                        Project("projectId1", Exclusion(projectIds = setOf("subProjectId1.1"), buildIds = setOf("buildId12"))),
+                                                        Project("projectId2", Exclusion(projectIds = setOf("subProjectId2.1")))))),
                                         emptyList()),
                                 listOf(
                                         Project(
@@ -835,7 +826,7 @@ class WatchStateTest {
                                 BuildConfig(listOf(
                                         Group(
                                                 setOf("groupId([0-9]+)"),
-                                                listOf(Project("projectId%s", teamcity.interactor.app.Exclusion(buildIds = setOf("buildId4")))))),
+                                                listOf(Project("projectId%s", Exclusion(buildIds = setOf("buildId4")))))),
                                         emptyList()),
                                 listOf(
                                         Project(
@@ -867,7 +858,7 @@ class WatchStateTest {
                                                 setOf("(\\w+)groupId"),
                                                 listOf(
                                                         Project("%sProjectId"),
-                                                        Project("projectId24", teamcity.interactor.app.Exclusion(buildIds = setOf("buildId4")))))),
+                                                        Project("projectId24", Exclusion(buildIds = setOf("buildId4")))))),
                                         emptyList()),
                                 listOf(
                                         Project(
@@ -1055,7 +1046,7 @@ class WatchStateTest {
                                 BuildConfig(listOf(
                                         Group(
                                                 setOf("groupId7"),
-                                                listOf(Project("projectId1", teamcity.interactor.app.Exclusion(buildIds = setOf("buildId1")))))),
+                                                listOf(Project("projectId1", Exclusion(buildIds = setOf("buildId1")))))),
                                         emptyList()),
                                 listOf(
                                         Project(
@@ -1080,7 +1071,7 @@ class WatchStateTest {
                                                 listOf(Project("projectId4"))),
                                         Group(
                                                 setOf("groupId8"),
-                                                listOf(Project("projectId1", teamcity.interactor.app.Exclusion(buildIds = setOf("buildId3")))))),
+                                                listOf(Project("projectId1", Exclusion(buildIds = setOf("buildId3")))))),
                                         emptyList()),
                                 listOf(
                                         Project(
@@ -1110,10 +1101,10 @@ class WatchStateTest {
                                 BuildConfig(listOf(
                                         Group(
                                                 setOf("groupId8"),
-                                                listOf(Project("projectId1", teamcity.interactor.app.Exclusion(buildIds = setOf("buildId1"))))),
+                                                listOf(Project("projectId1", Exclusion(buildIds = setOf("buildId1"))))),
                                         Group(
                                                 setOf("groupId9"),
-                                                listOf(Project("projectId2", teamcity.interactor.app.Exclusion(buildIds = setOf("buildId4")))))),
+                                                listOf(Project("projectId2", Exclusion(buildIds = setOf("buildId4")))))),
                                         emptyList()),
                                 listOf(
                                         Project(
@@ -1143,10 +1134,10 @@ class WatchStateTest {
                                 BuildConfig(listOf(
                                         Group(
                                                 setOf("groupId8"),
-                                                listOf(Project("projectId1", teamcity.interactor.app.Exclusion(buildIds = setOf("buildId1"))))),
+                                                listOf(Project("projectId1", Exclusion(buildIds = setOf("buildId1"))))),
                                         Group(
                                                 setOf("groupId10"),
-                                                listOf(Project("projectId2", teamcity.interactor.app.Exclusion(buildIds = setOf("buildId4")))))),
+                                                listOf(Project("projectId2", Exclusion(buildIds = setOf("buildId4")))))),
                                         emptyList()),
                                 listOf(
                                         Project(
@@ -1175,7 +1166,7 @@ class WatchStateTest {
                                 BuildConfig(listOf(
                                         Group(
                                                 setOf("groupId11"),
-                                                listOf(Project("projectId1", teamcity.interactor.app.Exclusion(buildIds = setOf("buildId1")))))),
+                                                listOf(Project("projectId1", Exclusion(buildIds = setOf("buildId1")))))),
                                         emptyList()),
                                 listOf(
                                         Project(
@@ -1295,7 +1286,7 @@ class WatchStateTest {
                                         Group(
                                                 setOf("groupId16"),
                                                 listOf(
-                                                        Project("projectId1", teamcity.interactor.app.Exclusion(projectIds = setOf("projectId1"))),
+                                                        Project("projectId1", Exclusion(projectIds = setOf("projectId1"))),
                                                         Project("projectId2")))),
                                         emptyList()),
                                 listOf(
@@ -1324,9 +1315,9 @@ class WatchStateTest {
                                                 setOf("groupId17"),
                                                 listOf(
                                                         Project("projectId1"),
-                                                        Project("projectId2", teamcity.interactor.app.Exclusion(buildIds = setOf("buildId3"))),
+                                                        Project("projectId2", Exclusion(buildIds = setOf("buildId3"))),
                                                         Project("projectId3"),
-                                                        Project("projectId4", teamcity.interactor.app.Exclusion(projectIds = setOf("projectId4.1"), buildIds = setOf("buildId8")))))),
+                                                        Project("projectId4", Exclusion(projectIds = setOf("projectId4.1"), buildIds = setOf("buildId8")))))),
                                         emptyList()),
                                 listOf(
                                         Project("projectId1", emptyList(), listOf(Build("buildId1", "SUCCESS"))),
@@ -1361,8 +1352,8 @@ class WatchStateTest {
                                 BuildConfig(listOf(
                                         Group(setOf("groupId4"), listOf(Project("projectId1"))),
                                         Group(setOf("groupId18"), listOf(
-                                                Project("projectId4", teamcity.interactor.app.Exclusion(projectIds = setOf("projectId4"))),
-                                                Project("projectId5", teamcity.interactor.app.Exclusion(buildIds = setOf("buildId6")))))),
+                                                Project("projectId4", Exclusion(projectIds = setOf("projectId4"))),
+                                                Project("projectId5", Exclusion(buildIds = setOf("buildId6")))))),
                                         emptyList()),
                                 listOf(
                                         Project(
@@ -1453,7 +1444,7 @@ class WatchStateTest {
                                                 setOf("(\\w+)groupId"),
                                                 listOf(
                                                         Project("%sProjectId"),
-                                                        Project("projectId24", teamcity.interactor.app.Exclusion(buildIds = setOf("buildId3")))))),
+                                                        Project("projectId24", Exclusion(buildIds = setOf("buildId3")))))),
                                         emptyList()),
                                 listOf(
                                         Project(

@@ -119,7 +119,6 @@ class TriggerBuildsTest {
                 }
     }
 
-    // TODO Use better display names for parameterized test rows
     @ParameterizedTest
     @MethodSource("triggerBuildsSuccessfullyTestCases")
     fun triggerBuilds(testConfig: TestConfiguration) {
